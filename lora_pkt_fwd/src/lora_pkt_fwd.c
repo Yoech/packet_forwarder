@@ -166,7 +166,7 @@ static bool gps_ref_valid; /* is GPS reference acceptable (ie. not too old) */
 static struct tref time_reference_gps; /* time reference used for GPS <-> timestamp conversion */
 
 /* Reference coordinates, for broadcasting (beacon) */
-static struct coord_s reference_coord;
+static struct coord_s reference_coord = {0.0, 0.0, 0, 0.0, 0.0};
 
 /* Enable faking the GPS coordinates of the gateway */
 static bool gps_fake_enable; /* enable the feature */
@@ -203,7 +203,6 @@ static uint32_t meas_nb_beacon_rejected = 0; /* count beacon rejected for queuin
 static pthread_mutex_t mx_meas_gps = PTHREAD_MUTEX_INITIALIZER; /* control access to the GPS statistics */
 static bool gps_coord_valid; /* could we get valid GPS coordinates ? */
 static struct coord_s meas_gps_coord; /* GPS position of the gateway */
-static struct coord_s meas_gps_err; /* GPS position of the gateway */
 
 static pthread_mutex_t mx_stat_rep = PTHREAD_MUTEX_INITIALIZER; /* control access to the status report */
 static bool report_ready = false; /* true when there is a new report to send to the server */
@@ -1027,7 +1026,7 @@ int main(void)
 
     /* GPS coordinates variables */
     bool coord_ok = false;
-    struct coord_s cp_gps_coord = {0.0, 0.0, 0};
+    struct coord_s cp_gps_coord = {0.0, 0.0, 0, 0.0, 0.0};
 
     /* SX1301 data variables */
     uint32_t trig_tstamp;
@@ -1386,6 +1385,7 @@ int main(void)
             }
             if (coord_ok == true) {
                 printf("# GPS coordinates: latitude %.5f, longitude %.5f, altitude %i m\n", cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt);
+                printf("# GPS estimated accuracy: horizontal %.1f m, vertical %.1f m\n", cp_gps_coord.eha, cp_gps_coord.eva);
             } else {
                 printf("# no valid GPS coordinates available yet\n");
             }
@@ -1399,7 +1399,7 @@ int main(void)
         /* generate a JSON report (will be sent to server by upstream thread) */
         pthread_mutex_lock(&mx_stat_rep);
         if (((gps_enabled == true) && (coord_ok == true)) || (gps_fake_enable == true)) {
-            snprintf(status_report, STATUS_SIZE, "\"stat\":{\"time\":\"%s\",\"lati\":%.6f,\"long\":%.6f,\"alti\":%i,\"rxnb\":%u,\"rxok\":%u,\"rxfw\":%u,\"ackr\":%.1f,\"dwnb\":%u,\"txnb\":%u}", stat_timestamp, cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt, cp_nb_rx_rcv, cp_nb_rx_ok, cp_up_pkt_fwd, 100.0 * up_ack_ratio, cp_dw_dgram_rcv, cp_nb_tx_ok);
+            snprintf(status_report, STATUS_SIZE, "\"stat\":{\"time\":\"%s\",\"lati\":%.6f,\"long\":%.6f,\"alti\":%i,\"eha\":%.1f,\"eva\":%.1f,\"rxnb\":%u,\"rxok\":%u,\"rxfw\":%u,\"ackr\":%.1f,\"dwnb\":%u,\"txnb\":%u}", stat_timestamp, cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt, cp_gps_coord.eha, cp_gps_coord.eva, cp_nb_rx_rcv, cp_nb_rx_ok, cp_up_pkt_fwd, 100.0 * up_ack_ratio, cp_dw_dgram_rcv, cp_nb_tx_ok);
         } else {
             snprintf(status_report, STATUS_SIZE, "\"stat\":{\"time\":\"%s\",\"rxnb\":%u,\"rxok\":%u,\"rxfw\":%u,\"ackr\":%.1f,\"dwnb\":%u,\"txnb\":%u}", stat_timestamp, cp_nb_rx_rcv, cp_nb_rx_ok, cp_up_pkt_fwd, 100.0 * up_ack_ratio, cp_dw_dgram_rcv, cp_nb_tx_ok);
         }
@@ -2664,7 +2664,7 @@ static void gps_process_sync(void) {
     struct timespec gps_time;
     struct timespec utc;
     uint32_t trig_tstamp; /* concentrator timestamp associated with PPM pulse */
-    int i = lgw_gps_get(&utc, &gps_time, NULL, NULL);
+    int i = lgw_gps_get(&utc, &gps_time, NULL);
 
     /* get GPS time for synchronization */
     if (i != LGW_GPS_SUCCESS) {
@@ -2693,15 +2693,13 @@ static void gps_process_sync(void) {
 static void gps_process_coords(void) {
     /* position variable */
     struct coord_s coord;
-    struct coord_s gpserr;
-    int    i = lgw_gps_get(NULL, NULL, &coord, &gpserr);
+    int    i = lgw_gps_get(NULL, NULL, &coord);
 
     /* update gateway coordinates */
     pthread_mutex_lock(&mx_meas_gps);
     if (i == LGW_GPS_SUCCESS) {
         gps_coord_valid = true;
         meas_gps_coord = coord;
-        meas_gps_err = gpserr;
         // TODO: report other GPS statistics (typ. signal quality & integrity)
     } else {
         gps_coord_valid = false;
