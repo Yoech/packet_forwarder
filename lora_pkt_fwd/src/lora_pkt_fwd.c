@@ -1447,7 +1447,6 @@ int main(void)
 
 void thread_up(void) {
     int i, j; /* loop variables */
-    unsigned pkt_in_dgram; /* nb on Lora packet in the current datagram */
 
     /* allocate memory for packet fetching and processing */
     struct lgw_pkt_rx_s rxpkt[NB_PKT_MAX]; /* array containing inbound packets + metadata */
@@ -1459,7 +1458,7 @@ void thread_up(void) {
     struct tref local_ref; /* time reference used for UTC <-> timestamp conversion */
 
     /* data buffers */
-    uint8_t buff_up[TX_BUFF_SIZE]; /* buffer to compose the upstream packet */
+    char buff_up[TX_BUFF_SIZE]; /* buffer to compose the upstream packet */
     int buff_index;
     uint8_t buff_ack[32]; /* buffer to receive acknowledges */
 
@@ -1497,6 +1496,7 @@ void thread_up(void) {
     *(uint32_t *)(buff_up + 4) = net_mac_h;
     *(uint32_t *)(buff_up + 8) = net_mac_l;
 
+
     while (!exit_sig && !quit_sig) {
 
         /* fetch packets */
@@ -1509,7 +1509,12 @@ void thread_up(void) {
         }
 
         /* check if there are status report to send */
-        send_report = report_ready; /* copy the variable so it doesn't change mid-function */
+
+        /******************************************************************/
+        /* TODO: uncomment                                                */
+        /******************************************************************/
+
+        /* send_report = report_ready; /\* copy the variable so it doesn't change mid-function *\/ */
         /* no mutex, we're only reading */
 
         /* wait a short time if no packets, nor status report */
@@ -1535,12 +1540,13 @@ void thread_up(void) {
         buff_up[2] = token_l;
         buff_index = 12; /* 12-byte header */
 
-        /* start of JSON structure */
-        memcpy((void *)(buff_up + buff_index), (void *)"{\"rxpk\":[", 9);
-        buff_index += 9;
+        JSON_Value *root_val = json_value_init_object();
+        JSON_Object *root_obj = json_value_get_object(root_val);
+        JSON_Value *  rx_pkts_val = json_value_init_array();
+        JSON_Array *  rx_pkts_arr = json_array(rx_pkts_val);
 
-        /* serialize Lora packets metadata and payload */
-        pkt_in_dgram = 0;
+        json_object_set_value(root_obj, "rxpkt", rx_pkts_val);
+
         for (i=0; i < nb_pkt; ++i) {
             p = &rxpkt[i];
 
@@ -1590,24 +1596,11 @@ void thread_up(void) {
             meas_up_payload_byte += p->size;
             pthread_mutex_unlock(&mx_meas_up);
 
-            /* Start of packet, add inter-packet separator if necessary */
-            if (pkt_in_dgram == 0) {
-                buff_up[buff_index] = '{';
-                ++buff_index;
-            } else {
-                buff_up[buff_index] = ',';
-                buff_up[buff_index+1] = '{';
-                buff_index += 2;
-            }
+            JSON_Value *  pkt_val = json_value_init_object();
+            JSON_Object * pkt_obj = json_object(pkt_val);
 
-            /* RAW timestamp, 8-17 useful chars */
-            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, "\"tmst\":%u", p->count_us);
-            if (j > 0) {
-                buff_index += j;
-            } else {
-                MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
-                exit(EXIT_FAILURE);
-            }
+            /* RAW timestamp */
+            json_object_set_number(pkt_obj, "tmst", p->count_us);
 
             /* Packet RX time (GPS based), 37 useful chars */
             if (ref_ok == true) {
@@ -1615,12 +1608,12 @@ void thread_up(void) {
                 j = lgw_cnt2utc(local_ref, p->count_us, &pkt_utc_time);
                 if (j == LGW_GPS_SUCCESS) {
                     /* split the UNIX timestamp to its calendar components */
+                    char time_buf[28];
                     x = gmtime(&(pkt_utc_time.tv_sec));
-                    j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"time\":\"%04i-%02i-%02iT%02i:%02i:%02i.%06liZ\"", (x->tm_year)+1900, (x->tm_mon)+1, x->tm_mday, x->tm_hour, x->tm_min, x->tm_sec, (pkt_utc_time.tv_nsec)/1000); /* ISO 8601 format */
-                    if (j > 0) {
-                        buff_index += j;
-                    } else {
-                        MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
+                    j = snprintf(time_buf, sizeof(time_buf), "%04i-%02i-%02iT%02i:%02i:%02i.%06liZ", (x->tm_year)+1900, (x->tm_mon)+1, x->tm_mday, x->tm_hour, x->tm_min, x->tm_sec, (pkt_utc_time.tv_nsec)/1000); /* ISO 8601 format */
+                    json_object_set_string(pkt_obj, "time", time_buf);
+                    if (j < 0) {
+                        MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 2));
                         exit(EXIT_FAILURE);
                     }
                 }
@@ -1628,204 +1621,141 @@ void thread_up(void) {
                 j = lgw_cnt2gps(local_ref, p->count_us, &pkt_gps_time);
                 if (j == LGW_GPS_SUCCESS) {
                     pkt_gps_time_ms = pkt_gps_time.tv_sec * 1E3 + pkt_gps_time.tv_nsec / 1E6;
-                    j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"tmms\":%llu",
-                                    pkt_gps_time_ms); /* GPS time in milliseconds since 06.Jan.1980 */
-                    if (j > 0) {
-                        buff_index += j;
-                    } else {
-                        MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
-                        exit(EXIT_FAILURE);
-                    }
+                    json_object_set_number(pkt_obj, "tmms", pkt_gps_time_ms);
                 }
             }
 
-            /* Packet concentrator channel, RF chain & RX frequency, 34-36 useful chars */
-            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"chan\":%1u,\"rfch\":%1u,\"freq\":%.6lf", p->if_chain, p->rf_chain, ((double)p->freq_hz / 1e6));
-            if (j > 0) {
-                buff_index += j;
-            } else {
-                MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
-                exit(EXIT_FAILURE);
-            }
+            json_object_set_number(pkt_obj, "chan", p->if_chain);
+            json_object_set_number(pkt_obj, "rfch", p->rf_chain);
+            json_object_set_number(pkt_obj, "freq", p->freq_hz / 1e6);
 
-            /* Packet status, 9-10 useful chars */
             switch (p->status) {
                 case STAT_CRC_OK:
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":1", 9);
-                    buff_index += 9;
+                    json_object_set_number(pkt_obj, "stat", 1);
                     break;
                 case STAT_CRC_BAD:
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":-1", 10);
-                    buff_index += 10;
+                    json_object_set_number(pkt_obj, "stat", -1);
                     break;
                 case STAT_NO_CRC:
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":0", 9);
-                    buff_index += 9;
+                    json_object_set_number(pkt_obj, "stat", 0);
                     break;
                 default:
                     MSG("ERROR: [up] received packet with unknown status\n");
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":?", 9);
-                    buff_index += 9;
+                    json_object_set_string(pkt_obj, "stat", "?");
                     exit(EXIT_FAILURE);
             }
 
             /* Packet modulation, 13-14 useful chars */
             if (p->modulation == MOD_LORA) {
-                memcpy((void *)(buff_up + buff_index), (void *)",\"modu\":\"LORA\"", 14);
-                buff_index += 14;
-
-                /* Lora datarate & bandwidth, 16-19 useful chars */
+                char datr_buf[10] = {0};
+                json_object_set_string(pkt_obj, "modu", "LORA");
                 switch (p->datarate) {
                     case DR_LORA_SF7:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF7", 12);
-                        buff_index += 12;
+                        strncat(datr_buf, "SF7", sizeof(datr_buf));
                         break;
                     case DR_LORA_SF8:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF8", 12);
-                        buff_index += 12;
+                        strncat(datr_buf, "SF8", sizeof(datr_buf));
                         break;
                     case DR_LORA_SF9:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF9", 12);
-                        buff_index += 12;
+                        strncat(datr_buf, "SF9", sizeof(datr_buf));
                         break;
                     case DR_LORA_SF10:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF10", 13);
-                        buff_index += 13;
+                        strncat(datr_buf, "SF10", sizeof(datr_buf));
                         break;
                     case DR_LORA_SF11:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF11", 13);
-                        buff_index += 13;
+                        strncat(datr_buf, "SF11", sizeof(datr_buf));
                         break;
                     case DR_LORA_SF12:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF12", 13);
-                        buff_index += 13;
+                        strncat(datr_buf, "SF12", sizeof(datr_buf));
                         break;
                     default:
                         MSG("ERROR: [up] lora packet with unknown datarate\n");
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF?", 12);
-                        buff_index += 12;
+                        strncat(datr_buf, "SF?", sizeof(datr_buf));
                         exit(EXIT_FAILURE);
                 }
                 switch (p->bandwidth) {
                     case BW_125KHZ:
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW125\"", 6);
-                        buff_index += 6;
+                        strncat(datr_buf, "BW125", sizeof(datr_buf));
                         break;
                     case BW_250KHZ:
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW250\"", 6);
-                        buff_index += 6;
+                        strncat(datr_buf, "BW250", sizeof(datr_buf));
                         break;
                     case BW_500KHZ:
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW500\"", 6);
-                        buff_index += 6;
+                        strncat(datr_buf, "BW500", sizeof(datr_buf));
                         break;
                     default:
                         MSG("ERROR: [up] lora packet with unknown bandwidth\n");
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW?\"", 4);
-                        buff_index += 4;
+                        strncat(datr_buf, "BW?", sizeof(datr_buf));
                         exit(EXIT_FAILURE);
                 }
+
+                json_object_set_string(pkt_obj, "datr", datr_buf);
 
                 /* Packet ECC coding rate, 11-13 useful chars */
                 switch (p->coderate) {
                     case CR_LORA_4_5:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/5\"", 13);
-                        buff_index += 13;
+                        json_object_set_string(pkt_obj, "codr", "4/5");
                         break;
                     case CR_LORA_4_6:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/6\"", 13);
-                        buff_index += 13;
+                        json_object_set_string(pkt_obj, "codr", "4/6");
                         break;
                     case CR_LORA_4_7:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/7\"", 13);
-                        buff_index += 13;
+                        json_object_set_string(pkt_obj, "codr", "4/7");
                         break;
                     case CR_LORA_4_8:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/8\"", 13);
-                        buff_index += 13;
+                        json_object_set_string(pkt_obj, "codr", "4/8");
                         break;
                     case 0: /* treat the CR0 case (mostly false sync) */
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"OFF\"", 13);
-                        buff_index += 13;
+                        json_object_set_string(pkt_obj, "codr", "OFF");
                         break;
                     default:
                         MSG("ERROR: [up] lora packet with unknown coderate\n");
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"?\"", 11);
-                        buff_index += 11;
+                        json_object_set_string(pkt_obj, "codr", "?");
                         exit(EXIT_FAILURE);
                 }
 
-                /* Lora SNR, 11-13 useful chars */
-                j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"lsnr\":%.1f", p->snr);
-                if (j > 0) {
-                    buff_index += j;
-                } else {
-                    MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
-                    exit(EXIT_FAILURE);
-                }
-            } else if (p->modulation == MOD_FSK) {
-                memcpy((void *)(buff_up + buff_index), (void *)",\"modu\":\"FSK\"", 13);
-                buff_index += 13;
+                json_object_set_number(pkt_obj, "lsnr", p->snr);
 
-                /* FSK datarate, 11-14 useful chars */
-                j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"datr\":%u", p->datarate);
-                if (j > 0) {
-                    buff_index += j;
-                } else {
-                    MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
-                    exit(EXIT_FAILURE);
-                }
+            } else if (p->modulation == MOD_FSK) {
+                json_object_set_string(pkt_obj, "modu", "FSK");
+                json_object_set_number(pkt_obj, "datr", p->datarate);
             } else {
                 MSG("ERROR: [up] received packet with unknown modulation\n");
                 exit(EXIT_FAILURE);
             }
 
-            /* Packet RSSI, payload size, 18-23 useful chars */
-            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"rssi\":%.0f,\"size\":%u", p->rssi, p->size);
-            if (j > 0) {
-                buff_index += j;
-            } else {
-                MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
-                exit(EXIT_FAILURE);
-            }
+            json_object_set_number(pkt_obj, "rssi", p->rssi);
+            json_object_set_number(pkt_obj, "size", p->size);
 
             /* Packet base64-encoded payload, 14-350 useful chars */
-            memcpy((void *)(buff_up + buff_index), (void *)",\"data\":\"", 9);
-            buff_index += 9;
-            j = bin_to_b64(p->payload, p->size, (char *)(buff_up + buff_index), 341); /* 255 bytes = 340 chars in b64 + null char */
+            char payload_b64_buf[341];
+            j = bin_to_b64(p->payload, p->size, payload_b64_buf, 341);
             if (j>=0) {
-                buff_index += j;
+                json_object_set_string(pkt_obj, "data", payload_b64_buf);
             } else {
-                MSG("ERROR: [up] bin_to_b64 failed line %u\n", (__LINE__ - 5));
+                MSG("ERROR: [up] bin_to_b64 failed line %u\n", (__LINE__ - 4));
                 exit(EXIT_FAILURE);
             }
-            buff_up[buff_index] = '"';
-            ++buff_index;
-
-            /* End of packet serialization */
-            buff_up[buff_index] = '}';
-            ++buff_index;
-            ++pkt_in_dgram;
+            json_array_append_value(rx_pkts_arr, pkt_val);
         }
 
         /* restart fetch sequence without sending empty JSON if all packets have been filtered out */
-        if (pkt_in_dgram == 0) {
-            if (send_report == true) {
-                /* need to clean up the beginning of the payload */
-                buff_index -= 8; /* removes "rxpk":[ */
-            } else {
-                /* all packet have been filtered out and no report, restart loop */
-                continue;
-            }
-        } else {
-            /* end of packet array */
-            buff_up[buff_index] = ']';
+        if (json_array_get_count(rx_pkts_arr) == 0 && !send_report) {
+            goto cleanup_json;
+        }
+
+        JSON_Status ser_res = json_serialize_to_buffer(root_val, &buff_up[buff_index], TX_BUFF_SIZE-buff_index);
+        if (JSONSuccess != ser_res) {
+            MSG("ERROR: [up] failed to serialize JSON object");
+            goto cleanup_json;
+        }
+
+        buff_index = strlen(buff_up);
+        assert(buff_index < TX_BUFF_SIZE);
+
+        if (send_report == true) {
+            buff_up[buff_index] = ',';
             ++buff_index;
-            /* add separator if needed */
-            if (send_report == true) {
-                buff_up[buff_index] = ',';
-                ++buff_index;
-            }
         }
 
         /* add status report if a new one is available */
@@ -1843,8 +1773,6 @@ void thread_up(void) {
         }
 
         /* end of JSON datagram payload */
-        buff_up[buff_index] = '}';
-        ++buff_index;
         buff_up[buff_index] = 0; /* add string terminator, for safety */
 
         MSG("\nJSON up: %s\n", (char *)(buff_up + 12)); /* DEBUG: display JSON payload */
@@ -1879,6 +1807,9 @@ void thread_up(void) {
             }
         }
         pthread_mutex_unlock(&mx_meas_up);
+
+    cleanup_json:
+        json_value_free(root_val);
     }
     MSG("\nINFO: End of upstream thread\n");
 }
