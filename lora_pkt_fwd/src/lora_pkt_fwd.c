@@ -1611,6 +1611,22 @@ void thread_up(void) {
                 exit(EXIT_FAILURE);
             }
 
+            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, "\"tmsr\":%u", p->count_raw);
+            if (j > 0) {
+                buff_index += j;
+            } else {
+                MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
+                exit(EXIT_FAILURE);
+            }
+
+            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, "\"tmsc\":%u", p->count_corr);
+            if (j > 0) {
+                buff_index += j;
+            } else {
+                MSG("ERROR: [up] snprintf failed line %u\n", (__LINE__ - 4));
+                exit(EXIT_FAILURE);
+            }
+
             /* Packet RX time (GPS based), 37 useful chars */
             if (ref_ok == true) {
                 /* convert packet timestamp to UTC absolute time */
