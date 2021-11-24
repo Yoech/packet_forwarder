@@ -2,3 +2,5 @@
 *.swp
 *.bak
 build
+.idea
+cmake-build-debug
