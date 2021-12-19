@@ -1,8 +1,14 @@
 *.o
 *.swp
 *.bak
-build
+*.cmake
+*.exe
+*.a
+*.tcl
 .idea
 cmake-build-debug
 CMakeFiles
 CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Makefile

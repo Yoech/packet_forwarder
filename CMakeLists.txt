@@ -10,6 +10,7 @@ set(CMAKE_C_STANDARD 99)
 # Generate `compile_commands.json` in build directory
 # Can be used with static analyzers and code-completion tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(WITH_VENDORED_HAL ON)
 
 ##########################################################################
 # Dependencies                                                           #
