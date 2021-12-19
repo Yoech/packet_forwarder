@@ -844,6 +844,7 @@ static int parse_gateway_configuration(const char * conf_file) {
     }
 
     /* Auto-quit threshold (optional) */
+    /* 在XXX个未收到PULL_DATA的确认包后自动退出 */
     val = json_object_get_value(conf_obj, "autoquit_threshold");
     if (val != NULL) {
         autoquit_threshold = (uint32_t)json_value_get_number(val);
