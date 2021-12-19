@@ -19,11 +19,11 @@ Maintainer: Michael Coracin
 
 #include <syslog.h>
 
-#define DEBUG_PKT_FWD   0
-#define DEBUG_JIT       0
+#define DEBUG_PKT_FWD   1
+#define DEBUG_JIT       1
 #define DEBUG_JIT_ERROR 1
-#define DEBUG_TIMERSYNC 0
-#define DEBUG_BEACON    0
+#define DEBUG_TIMERSYNC 1
+#define DEBUG_BEACON    1
 #define DEBUG_LOG       1
 
 #define MSG(args...) printf(args) /* message that is destined to the user */
