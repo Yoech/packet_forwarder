@@ -377,7 +377,7 @@ int lgw_spi_rb(void *spi_target, uint8_t spi_mux_mode, uint8_t spi_mux_target, u
         DEBUG_MSG("ERROR: SPI BURST READ FAILURE\n");
         return LGW_SPI_ERROR;
     } else {
-        DEBUG_MSG("Note: SPI burst read success\n");
+        //DEBUG_MSG("Note: SPI burst read success\n");
         return LGW_SPI_SUCCESS;
     }
 }
