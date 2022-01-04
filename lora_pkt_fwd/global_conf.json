@@ -1,5 +1,6 @@
 {
     "SX1301_conf": {
+        "spidev_path": "/dev/spidev0.0",
         "lorawan_public": true,
         "clksrc": 1,
         "antenna_gain": 0,

@@ -177,6 +177,8 @@ enum lgw_radio_type_e {
 struct lgw_conf_board_s {
     bool    lorawan_public; /*!> Enable ONLY for *public* networks using the LoRa MAC protocol */
     uint8_t clksrc;         /*!> Index of RF chain which provides clock to concentrator */
+    bool    full_duplex;    /*!> Indicates if the gateway operates in full duplex mode or not */
+    char    spidev_path[64];/*!> Path to access the SPI device to connect to the SX1302 */
 };
 
 /**
@@ -293,6 +295,29 @@ struct lgw_tx_gain_lut_s {
     struct lgw_tx_gain_s    lut[TX_GAIN_LUT_SIZE_MAX];  /*!> Array of Tx gain struct */
     uint8_t                 size;                       /*!> Number of LUT indexes */
 };
+
+/**
+@struct lgw_context_s
+@brief Configuration context shared across modules
+*/
+typedef struct lgw_context_s {
+    /* Global context */
+    bool                        is_started;
+    struct lgw_conf_board_s     board_cfg;
+    /* RX context */
+    struct lgw_conf_rxrf_s      rf_chain_cfg[LGW_RF_CHAIN_NB];
+    struct lgw_conf_rxif_s      if_chain_cfg[LGW_IF_CHAIN_NB];
+    struct lgw_conf_rxif_s      lora_service_cfg;                       /* LoRa service channel config parameters */
+    struct lgw_conf_rxif_s      fsk_cfg;                                /* FSK channel config parameters */
+    /* TX context */
+    struct lgw_tx_gain_lut_s    tx_gain_lut[LGW_RF_CHAIN_NB];
+    //// Not supported yet
+    //// Cool.Cat
+    ///* Misc */
+    //struct lgw_conf_timestamp_s timestamp_cfg;
+    ///* Debug */
+    //struct lgw_conf_debug_s     debug_cfg;
+} lgw_context_t;
 
 /* -------------------------------------------------------------------------- */
 /* --- PUBLIC FUNCTIONS PROTOTYPES ------------------------------------------ */

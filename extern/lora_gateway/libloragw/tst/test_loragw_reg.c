@@ -27,8 +27,7 @@ Maintainer: Sylvain Miermont
 
 #define BURST_TEST_LENGTH    8192
 
-int main()
-{
+int main() {
     int32_t read_value, test_value;
     uint16_t lfsr;
     uint8_t burst_buffout[BURST_TEST_LENGTH];
@@ -37,7 +36,7 @@ int main()
 
     printf("Beginning of test for loragw_reg.c\n");
 
-    lgw_connect(false, 129E3);
+    lgw_connect("/dev/spidev0.0", false, 129E3);
     /* 2 SPI transactions:
     -> 0x80 0x00        <- 0x00 0x00        forcing page 0
     -> 0x01 0x00        <- 0x00 0x64        checking version
@@ -108,8 +107,8 @@ int main()
 
     /* initialize data for SPI test */
     lfsr = 0xFFFF;
-    for(i=0; i<BURST_TEST_LENGTH; ++i) {
-        burst_buffout[i] = (uint8_t)(lfsr ^ (lfsr >> 4));
+    for (i = 0; i < BURST_TEST_LENGTH; ++i) {
+        burst_buffout[i] = (uint8_t) (lfsr ^ (lfsr >> 4));
         /* printf("%05d # 0x%04x 0x%02x\n", i, lfsr, burst_buffout[i]); */
         lfsr = (lfsr & 1) ? ((lfsr >> 1) ^ 0x8679) : (lfsr >> 1);
     }

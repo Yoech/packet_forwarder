@@ -19,9 +19,9 @@ Maintainer: Michael Coracin
 
 /* fix an issue between POSIX and C99 */
 #if __STDC_VERSION__ >= 199901L
-    #define _XOPEN_SOURCE 600
+#define _XOPEN_SOURCE 600
 #else
-    #define _XOPEN_SOURCE 500
+#define _XOPEN_SOURCE 500
 #endif
 
 #include <stdint.h>     /* C99 types */
@@ -59,7 +59,7 @@ static int quit_sig = 0; /* 1 -> application terminates without shutting down th
 
 static void sig_handler(int sigio);
 
-void usage (void);
+void usage(void);
 
 /* -------------------------------------------------------------------------- */
 /* --- PRIVATE FUNCTIONS DEFINITION ----------------------------------------- */
@@ -85,8 +85,7 @@ void usage(void) {
 /* -------------------------------------------------------------------------- */
 /* --- MAIN FUNCTION -------------------------------------------------------- */
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     int i;
     int xi = 0;
 
@@ -105,7 +104,7 @@ int main(int argc, char **argv)
     uint32_t freq_offset;
 
     /* parse command line options */
-    while ((i = getopt (argc, argv, "h:f:s:r:o:")) != -1) {
+    while ((i = getopt(argc, argv, "h:f:s:r:o:")) != -1) {
         switch (i) {
             case 'h':
                 usage();
@@ -119,7 +118,7 @@ int main(int argc, char **argv)
                     usage();
                     return EXIT_FAILURE;
                 } else {
-                    f_start = (uint32_t)((f1*1e6) + 0.5);/* .5 Hz offset to get rounding instead of truncating */
+                    f_start = (uint32_t) ((f1 * 1e6) + 0.5);/* .5 Hz offset to get rounding instead of truncating */
                 }
                 break;
             case 's':
@@ -144,12 +143,12 @@ int main(int argc, char **argv)
                 break;
             case 'o': /* -o <int>  SX127x RSSI offset [-128..127] */
                 i = sscanf(optarg, "%i", &xi);
-                if((i != 1) || (xi < -128) || (xi > 127)) {
+                if ((i != 1) || (xi < -128) || (xi > 127)) {
                     MSG("ERROR: rssi_offset must be b/w -128 & 127\n");
                     usage();
                     return EXIT_FAILURE;
                 } else {
-                    rssi_offset = (int8_t)xi;
+                    rssi_offset = (int8_t) xi;
                 }
                 break;
             default:
@@ -170,7 +169,7 @@ int main(int argc, char **argv)
     sigaction(SIGTERM, &sigact, NULL);
 
     /* Connect to concentrator */
-    i = lgw_connect(false, LGW_DEFAULT_NOTCH_FREQ);
+    i = lgw_connect("/dev/spidev0.0", false, LGW_DEFAULT_NOTCH_FREQ);
     if (i != LGW_REG_SUCCESS) {
         MSG("ERROR: lgw_connect() did not return SUCCESS\n");
         return EXIT_FAILURE;
@@ -178,8 +177,8 @@ int main(int argc, char **argv)
 
     /* Check if FPGA supports LBT */
     lgw_fpga_reg_r(LGW_FPGA_FEATURE, &val);
-    if (TAKE_N_BITS_FROM((uint8_t)val, 2, 1) != true) {
-        MSG("ERROR: LBT is not supported (0x%x)\n", (uint8_t)val);
+    if (TAKE_N_BITS_FROM((uint8_t) val, 2, 1) != true) {
+        MSG("ERROR: LBT is not supported (0x%x)\n", (uint8_t) val);
         return EXIT_FAILURE;
     }
 
@@ -210,31 +209,32 @@ int main(int argc, char **argv)
     lgw_setup_sx127x(f_init, MOD_FSK, LGW_SX127X_RXBW_100K_HZ, rssi_offset); /* 200KHz LBT channels */
     for (i = 0; i < 100; i++) {
         lgw_sx127x_reg_r(0x11, &rssi_value); /* 0x11: RegRssiValue */
-        MSG("SX127x RSSI:%i dBm\n", -(rssi_value/2));
+        MSG("SX127x RSSI:%i dBm\n", -(rssi_value / 2));
         wait_ms(10);
     }
 
     /* Configure LBT */
-    val = -2*(rssi_target_dBm);
+    val = -2 * (rssi_target_dBm);
     lgw_fpga_reg_w(LGW_FPGA_RSSI_TARGET, val);
     for (i = 0; i < LBT_CHANNEL_FREQ_NB; i++) {
-        freq_offset = (f_start - f_init)/100E3 + i*2; /* 200KHz between each channel */
-        lgw_fpga_reg_w(LGW_FPGA_LBT_CH0_FREQ_OFFSET+i, (int32_t)freq_offset);
+        freq_offset = (f_start - f_init) / 100E3 + i * 2; /* 200KHz between each channel */
+        lgw_fpga_reg_w(LGW_FPGA_LBT_CH0_FREQ_OFFSET + i, (int32_t) freq_offset);
         if (scan_time_us == 5000) { /* configured to 128 by default */
-            lgw_fpga_reg_w(LGW_FPGA_LBT_SCAN_TIME_CH0+i, 1);
+            lgw_fpga_reg_w(LGW_FPGA_LBT_SCAN_TIME_CH0 + i, 1);
         }
     }
 
     lgw_fpga_reg_r(LGW_FPGA_RSSI_TARGET, &val);
     MSG("RSSI_TARGET = %d\n", val);
-    if (val != (-2*rssi_target_dBm)) {
+    if (val != (-2 * rssi_target_dBm)) {
         MSG("ERROR: failed to read back RSSI target register value\n");
         return EXIT_FAILURE;
     }
     for (i = 0; i < LBT_CHANNEL_FREQ_NB; i++) {
-        lgw_fpga_reg_r(LGW_FPGA_LBT_CH0_FREQ_OFFSET+i, &val);
-        lgw_fpga_reg_r(LGW_FPGA_LBT_SCAN_TIME_CH0+i, &val2);
-        MSG("CH_%i: freq=%u (offset=%i), scan_time=%u (%i)\n", i, (uint32_t)((val*100E3)+f_init), val, (val2==1)?5000:128, val2);
+        lgw_fpga_reg_r(LGW_FPGA_LBT_CH0_FREQ_OFFSET + i, &val);
+        lgw_fpga_reg_r(LGW_FPGA_LBT_SCAN_TIME_CH0 + i, &val2);
+        MSG("CH_%i: freq=%u (offset=%i), scan_time=%u (%i)\n", i, (uint32_t) ((val * 100E3) + f_init), val,
+            (val2 == 1) ? 5000 : 128, val2);
     }
     lgw_fpga_reg_r(LGW_FPGA_VERSION, &val);
     MSG("FPGA VERSION = %d\n", val);
@@ -251,7 +251,7 @@ int main(int argc, char **argv)
 
             /* Get last instant when the selected channel was free */
             lgw_fpga_reg_r(LGW_FPGA_LBT_TIMESTAMP_CH, &val);
-            timestamp = (uint32_t)(val & 0x0000FFFF) * 256; /* 16bits (1LSB = 256µs) */
+            timestamp = (uint32_t) (val & 0x0000FFFF) * 256; /* 16bits (1LSB = 256µs) */
             MSG(" TIMESTAMP_CH%u = %u\n", channel, timestamp);
         }
 

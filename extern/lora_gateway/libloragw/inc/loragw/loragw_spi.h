@@ -48,11 +48,12 @@ Maintainer: Sylvain Miermont
 
 /**
 @brief LoRa concentrator SPI setup (configure I/O and peripherals)
+@param spidev_path path to the SPI device to be used to connect to the SX1302
 @param spi_target_ptr pointer on a generic pointer to SPI target (implementation dependant)
 @return status of register operation (LGW_SPI_SUCCESS/LGW_SPI_ERROR)
 */
 
-int lgw_spi_open(void **spi_target_ptr);
+int lgw_spi_open(const char *spidev_path, void **spi_target_ptr);
 
 /**
 @brief LoRa concentrator SPI close
@@ -88,7 +89,8 @@ int lgw_spi_r(void *spi_target, uint8_t spi_mux_mode, uint8_t spi_mux_target, ui
 @param size size of the transfer, in byte(s)
 @return status of register operation (LGW_SPI_SUCCESS/LGW_SPI_ERROR)
 */
-int lgw_spi_wb(void *spi_target, uint8_t spi_mux_mode, uint8_t spi_mux_target, uint8_t address, uint8_t *data, uint16_t size);
+int lgw_spi_wb(void *spi_target, uint8_t spi_mux_mode, uint8_t spi_mux_target, uint8_t address, uint8_t *data,
+               uint16_t size);
 
 /**
 @brief LoRa concentrator SPI burst (multiple-byte) read
@@ -98,7 +100,8 @@ int lgw_spi_wb(void *spi_target, uint8_t spi_mux_mode, uint8_t spi_mux_target, u
 @param size size of the transfer, in byte(s)
 @return status of register operation (LGW_SPI_SUCCESS/LGW_SPI_ERROR)
 */
-int lgw_spi_rb(void *spi_target, uint8_t spi_mux_mode, uint8_t spi_mux_target, uint8_t address, uint8_t *data, uint16_t size);
+int lgw_spi_rb(void *spi_target, uint8_t spi_mux_mode, uint8_t spi_mux_target, uint8_t address, uint8_t *data,
+               uint16_t size);
 
 #endif
 

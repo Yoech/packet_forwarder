@@ -21,9 +21,9 @@ Maintainer: Michael Coracin
 
 /* fix an issue between POSIX and C99 */
 #if __STDC_VERSION__ >= 199901L
-    #define _XOPEN_SOURCE 600
+#define _XOPEN_SOURCE 600
 #else
-    #define _XOPEN_SOURCE 500
+#define _XOPEN_SOURCE 500
 #endif
 
 #include <stdint.h>         /* C99 types */
@@ -68,7 +68,7 @@ Maintainer: Michael Coracin
 /* --- PRIVATE CONSTANTS ---------------------------------------------------- */
 
 #ifndef VERSION_STRING
-  #define VERSION_STRING "undefined"
+#define VERSION_STRING "undefined"
 #endif
 
 #define DEFAULT_SERVER      127.0.0.1   /* hostname also supported */
@@ -238,11 +238,11 @@ static uint32_t tx_freq_max[LGW_RF_CHAIN_NB]; /* highest frequency supported by 
 
 static void sig_handler(int sigio);
 
-static int parse_SX1301_configuration(const char * conf_file);
+static int parse_SX1301_configuration(const char *conf_file);
 
-static int parse_gateway_configuration(const char * conf_file);
+static int parse_gateway_configuration(const char *conf_file);
 
-static uint16_t crc16(const uint8_t * data, unsigned size);
+static uint16_t crc16(const uint8_t *data, unsigned size);
 
 static double difftimespec(struct timespec end, struct timespec beginning);
 
@@ -252,10 +252,15 @@ static void gps_process_coords(void);
 
 /* threads */
 void thread_up(void);
+
 void thread_down(void);
+
 void thread_gps(void);
+
 void thread_valid(void);
+
 void thread_jit(void);
+
 void thread_timersync(void);
 
 /* -------------------------------------------------------------------------- */
@@ -270,7 +275,7 @@ static void sig_handler(int sigio) {
     return;
 }
 
-static int parse_SX1301_configuration(const char * conf_file) {
+static int parse_SX1301_configuration(const char *conf_file) {
     int i;
     char param_name[32]; /* used to generate variable parameter names */
     const char *str; /* used to store string value from JSON object */
@@ -304,22 +309,43 @@ static int parse_SX1301_configuration(const char * conf_file) {
     }
 
     /* set board configuration */
+    // add by Cool.Cat@2022-01-04
     memset(&boardconf, 0, sizeof boardconf); /* initialize configuration structure */
+    str = json_object_get_string(conf_obj, "spidev_path");
+    if (str != NULL) {
+        strncpy(boardconf.spidev_path, str, sizeof boardconf.spidev_path);
+        boardconf.spidev_path[sizeof boardconf.spidev_path - 1] = '\0'; /* ensure string termination */
+    } else {
+        MSG("ERROR: spidev path must be configured in %s\n", conf_file);
+        return -1;
+    }
+
     val = json_object_get_value(conf_obj, "lorawan_public"); /* fetch value (if possible) */
     if (json_value_get_type(val) == JSONBoolean) {
-        boardconf.lorawan_public = (bool)json_value_get_boolean(val);
+        boardconf.lorawan_public = (bool) json_value_get_boolean(val);
     } else {
         MSG("WARNING: Data type for lorawan_public seems wrong, please check\n");
         boardconf.lorawan_public = false;
     }
     val = json_object_get_value(conf_obj, "clksrc"); /* fetch value (if possible) */
     if (json_value_get_type(val) == JSONNumber) {
-        boardconf.clksrc = (uint8_t)json_value_get_number(val);
+        boardconf.clksrc = (uint8_t) json_value_get_number(val);
     } else {
         MSG("WARNING: Data type for clksrc seems wrong, please check\n");
         boardconf.clksrc = 0;
     }
-    MSG("INFO: lorawan_public %d, clksrc %d\n", boardconf.lorawan_public, boardconf.clksrc);
+
+    val = json_object_get_value(conf_obj, "full_duplex"); /* fetch value (if possible) */
+    if (json_value_get_type(val) == JSONBoolean) {
+        boardconf.full_duplex = (bool) json_value_get_boolean(val);
+    } else {
+        MSG("WARNING: Data type for full_duplex seems wrong, please check\n");
+        boardconf.full_duplex = false;
+    }
+
+    MSG("INFO: spidev_path %s, lorawan_public %d, clksrc %d, full_duplex %d\n", boardconf.spidev_path,
+        boardconf.lorawan_public, boardconf.clksrc, boardconf.full_duplex);
+
     /* all parameters parsed, submitting configuration to the HAL */
     if (lgw_board_setconf(boardconf) != LGW_HAL_SUCCESS) {
         MSG("ERROR: Failed to configure board\n");
@@ -334,7 +360,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
     } else {
         val = json_object_get_value(conf_lbt_obj, "enable"); /* fetch value (if possible) */
         if (json_value_get_type(val) == JSONBoolean) {
-            lbtconf.enable = (bool)json_value_get_boolean(val);
+            lbtconf.enable = (bool) json_value_get_boolean(val);
         } else {
             MSG("WARNING: Data type for lbt_cfg.enable seems wrong, please check\n");
             lbtconf.enable = false;
@@ -342,14 +368,14 @@ static int parse_SX1301_configuration(const char * conf_file) {
         if (lbtconf.enable == true) {
             val = json_object_get_value(conf_lbt_obj, "rssi_target"); /* fetch value (if possible) */
             if (json_value_get_type(val) == JSONNumber) {
-                lbtconf.rssi_target = (int8_t)json_value_get_number(val);
+                lbtconf.rssi_target = (int8_t) json_value_get_number(val);
             } else {
                 MSG("WARNING: Data type for lbt_cfg.rssi_target seems wrong, please check\n");
                 lbtconf.rssi_target = 0;
             }
             val = json_object_get_value(conf_lbt_obj, "sx127x_rssi_offset"); /* fetch value (if possible) */
             if (json_value_get_type(val) == JSONNumber) {
-                lbtconf.rssi_offset = (int8_t)json_value_get_number(val);
+                lbtconf.rssi_offset = (int8_t) json_value_get_number(val);
             } else {
                 MSG("WARNING: Data type for lbt_cfg.sx127x_rssi_offset seems wrong, please check\n");
                 lbtconf.rssi_offset = 0;
@@ -357,14 +383,13 @@ static int parse_SX1301_configuration(const char * conf_file) {
             /* set LBT channels configuration */
             conf_array = json_object_get_array(conf_lbt_obj, "chan_cfg");
             if (conf_array != NULL) {
-                lbtconf.nb_channel = json_array_get_count( conf_array );
+                lbtconf.nb_channel = json_array_get_count(conf_array);
                 MSG("INFO: %u LBT channels configured\n", lbtconf.nb_channel);
             }
-            for (i = 0; i < (int)lbtconf.nb_channel; i++) {
+            for (i = 0; i < (int) lbtconf.nb_channel; i++) {
                 /* Sanity check */
-                if (i >= LBT_CHANNEL_FREQ_NB)
-                {
-                    MSG("ERROR: LBT channel %d not supported, skip it\n", i );
+                if (i >= LBT_CHANNEL_FREQ_NB) {
+                    MSG("ERROR: LBT channel %d not supported, skip it\n", i);
                     break;
                 }
                 /* Get LBT channel configuration object from array */
@@ -373,7 +398,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
                 /* Channel frequency */
                 val = json_object_dotget_value(conf_lbtchan_obj, "freq_hz"); /* fetch value (if possible) */
                 if (json_value_get_type(val) == JSONNumber) {
-                    lbtconf.channels[i].freq_hz = (uint32_t)json_value_get_number(val);
+                    lbtconf.channels[i].freq_hz = (uint32_t) json_value_get_number(val);
                 } else {
                     MSG("WARNING: Data type for lbt_cfg.channels[%d].freq_hz seems wrong, please check\n", i);
                     lbtconf.channels[i].freq_hz = 0;
@@ -382,7 +407,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
                 /* Channel scan time */
                 val = json_object_dotget_value(conf_lbtchan_obj, "scan_time_us"); /* fetch value (if possible) */
                 if (json_value_get_type(val) == JSONNumber) {
-                    lbtconf.channels[i].scan_time_us = (uint16_t)json_value_get_number(val);
+                    lbtconf.channels[i].scan_time_us = (uint16_t) json_value_get_number(val);
                 } else {
                     MSG("WARNING: Data type for lbt_cfg.channels[%d].scan_time_us seems wrong, please check\n", i);
                     lbtconf.channels[i].scan_time_us = 0;
@@ -403,7 +428,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
     val = json_object_get_value(conf_obj, "antenna_gain"); /* fetch value (if possible) */
     if (val != NULL) {
         if (json_value_get_type(val) == JSONNumber) {
-            antenna_gain = (int8_t)json_value_get_number(val);
+            antenna_gain = (int8_t) json_value_get_number(val);
         } else {
             MSG("WARNING: Data type for antenna_gain seems wrong, please check\n");
             antenna_gain = 0;
@@ -425,7 +450,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
         snprintf(param_name, sizeof param_name, "tx_lut_%i.pa_gain", i);
         val = json_object_dotget_value(conf_obj, param_name);
         if (json_value_get_type(val) == JSONNumber) {
-            txlut.lut[i].pa_gain = (uint8_t)json_value_get_number(val);
+            txlut.lut[i].pa_gain = (uint8_t) json_value_get_number(val);
         } else {
             MSG("WARNING: Data type for %s[%d] seems wrong, please check\n", param_name, i);
             txlut.lut[i].pa_gain = 0;
@@ -433,14 +458,14 @@ static int parse_SX1301_configuration(const char * conf_file) {
         snprintf(param_name, sizeof param_name, "tx_lut_%i.dac_gain", i);
         val = json_object_dotget_value(conf_obj, param_name);
         if (json_value_get_type(val) == JSONNumber) {
-            txlut.lut[i].dac_gain = (uint8_t)json_value_get_number(val);
+            txlut.lut[i].dac_gain = (uint8_t) json_value_get_number(val);
         } else {
             txlut.lut[i].dac_gain = 3; /* This is the only dac_gain supported for now */
         }
         snprintf(param_name, sizeof param_name, "tx_lut_%i.dig_gain", i);
         val = json_object_dotget_value(conf_obj, param_name);
         if (json_value_get_type(val) == JSONNumber) {
-            txlut.lut[i].dig_gain = (uint8_t)json_value_get_number(val);
+            txlut.lut[i].dig_gain = (uint8_t) json_value_get_number(val);
         } else {
             MSG("WARNING: Data type for %s[%d] seems wrong, please check\n", param_name, i);
             txlut.lut[i].dig_gain = 0;
@@ -448,7 +473,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
         snprintf(param_name, sizeof param_name, "tx_lut_%i.mix_gain", i);
         val = json_object_dotget_value(conf_obj, param_name);
         if (json_value_get_type(val) == JSONNumber) {
-            txlut.lut[i].mix_gain = (uint8_t)json_value_get_number(val);
+            txlut.lut[i].mix_gain = (uint8_t) json_value_get_number(val);
         } else {
             MSG("WARNING: Data type for %s[%d] seems wrong, please check\n", param_name, i);
             txlut.lut[i].mix_gain = 0;
@@ -456,7 +481,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
         snprintf(param_name, sizeof param_name, "tx_lut_%i.rf_power", i);
         val = json_object_dotget_value(conf_obj, param_name);
         if (json_value_get_type(val) == JSONNumber) {
-            txlut.lut[i].rf_power = (int8_t)json_value_get_number(val);
+            txlut.lut[i].rf_power = (int8_t) json_value_get_number(val);
         } else {
             MSG("WARNING: Data type for %s[%d] seems wrong, please check\n", param_name, i);
             txlut.lut[i].rf_power = 0;
@@ -486,17 +511,17 @@ static int parse_SX1301_configuration(const char * conf_file) {
         snprintf(param_name, sizeof param_name, "radio_%i.enable", i);
         val = json_object_dotget_value(conf_obj, param_name);
         if (json_value_get_type(val) == JSONBoolean) {
-            rfconf.enable = (bool)json_value_get_boolean(val);
+            rfconf.enable = (bool) json_value_get_boolean(val);
         } else {
             rfconf.enable = false;
         }
         if (rfconf.enable == false) { /* radio disabled, nothing else to parse */
             MSG("INFO: radio %i disabled\n", i);
-        } else  { /* radio enabled, will parse the other parameters */
+        } else { /* radio enabled, will parse the other parameters */
             snprintf(param_name, sizeof param_name, "radio_%i.freq", i);
-            rfconf.freq_hz = (uint32_t)json_object_dotget_number(conf_obj, param_name);
+            rfconf.freq_hz = (uint32_t) json_object_dotget_number(conf_obj, param_name);
             snprintf(param_name, sizeof param_name, "radio_%i.rssi_offset", i);
-            rfconf.rssi_offset = (float)json_object_dotget_number(conf_obj, param_name);
+            rfconf.rssi_offset = (float) json_object_dotget_number(conf_obj, param_name);
             snprintf(param_name, sizeof param_name, "radio_%i.type", i);
             str = json_object_dotget_string(conf_obj, param_name);
             if (!strncmp(str, "SX1255", 6)) {
@@ -509,24 +534,25 @@ static int parse_SX1301_configuration(const char * conf_file) {
             snprintf(param_name, sizeof param_name, "radio_%i.tx_enable", i);
             val = json_object_dotget_value(conf_obj, param_name);
             if (json_value_get_type(val) == JSONBoolean) {
-                rfconf.tx_enable = (bool)json_value_get_boolean(val);
+                rfconf.tx_enable = (bool) json_value_get_boolean(val);
                 if (rfconf.tx_enable == true) {
                     /* tx is enabled on this rf chain, we need its frequency range */
                     snprintf(param_name, sizeof param_name, "radio_%i.tx_freq_min", i);
-                    tx_freq_min[i] = (uint32_t)json_object_dotget_number(conf_obj, param_name);
+                    tx_freq_min[i] = (uint32_t) json_object_dotget_number(conf_obj, param_name);
                     snprintf(param_name, sizeof param_name, "radio_%i.tx_freq_max", i);
-                    tx_freq_max[i] = (uint32_t)json_object_dotget_number(conf_obj, param_name);
+                    tx_freq_max[i] = (uint32_t) json_object_dotget_number(conf_obj, param_name);
                     if ((tx_freq_min[i] == 0) || (tx_freq_max[i] == 0)) {
                         MSG("WARNING: no frequency range specified for TX rf chain %d\n", i);
                     }
                     /* ... and the notch filter frequency to be set */
                     snprintf(param_name, sizeof param_name, "radio_%i.tx_notch_freq", i);
-                    rfconf.tx_notch_freq = (uint32_t)json_object_dotget_number(conf_obj, param_name);
+                    rfconf.tx_notch_freq = (uint32_t) json_object_dotget_number(conf_obj, param_name);
                 }
             } else {
                 rfconf.tx_enable = false;
             }
-            MSG("INFO: radio %i enabled (type %s), center frequency %u, RSSI offset %f, tx enabled %d, tx_notch_freq %u\n", i, str, rfconf.freq_hz, rfconf.rssi_offset, rfconf.tx_enable, rfconf.tx_notch_freq);
+            MSG("INFO: radio %i enabled (type %s), center frequency %u, RSSI offset %f, tx enabled %d, tx_notch_freq %u\n",
+                i, str, rfconf.freq_hz, rfconf.rssi_offset, rfconf.tx_enable, rfconf.tx_notch_freq);
         }
         /* all parameters parsed, submitting configuration to the HAL */
         if (lgw_rxrf_setconf(i, rfconf) != LGW_HAL_SUCCESS) {
@@ -538,7 +564,8 @@ static int parse_SX1301_configuration(const char * conf_file) {
     /* set configuration for Lora multi-SF channels (bandwidth cannot be set) */
     for (i = 0; i < LGW_MULTI_NB; ++i) {
         memset(&ifconf, 0, sizeof ifconf); /* initialize configuration structure */
-        snprintf(param_name, sizeof param_name, "chan_multiSF_%i", i); /* compose parameter path inside JSON structure */
+        snprintf(param_name, sizeof param_name, "chan_multiSF_%i",
+                 i); /* compose parameter path inside JSON structure */
         val = json_object_get_value(conf_obj, param_name); /* fetch value (if possible) */
         if (json_value_get_type(val) != JSONObject) {
             MSG("INFO: no configuration for Lora multi-SF channel %i\n", i);
@@ -548,19 +575,20 @@ static int parse_SX1301_configuration(const char * conf_file) {
         snprintf(param_name, sizeof param_name, "chan_multiSF_%i.enable", i);
         val = json_object_dotget_value(conf_obj, param_name);
         if (json_value_get_type(val) == JSONBoolean) {
-            ifconf.enable = (bool)json_value_get_boolean(val);
+            ifconf.enable = (bool) json_value_get_boolean(val);
         } else {
             ifconf.enable = false;
         }
         if (ifconf.enable == false) { /* Lora multi-SF channel disabled, nothing else to parse */
             MSG("INFO: Lora multi-SF channel %i disabled\n", i);
-        } else  { /* Lora multi-SF channel enabled, will parse the other parameters */
+        } else { /* Lora multi-SF channel enabled, will parse the other parameters */
             snprintf(param_name, sizeof param_name, "chan_multiSF_%i.radio", i);
-            ifconf.rf_chain = (uint32_t)json_object_dotget_number(conf_obj, param_name);
+            ifconf.rf_chain = (uint32_t) json_object_dotget_number(conf_obj, param_name);
             snprintf(param_name, sizeof param_name, "chan_multiSF_%i.if", i);
-            ifconf.freq_hz = (int32_t)json_object_dotget_number(conf_obj, param_name);
+            ifconf.freq_hz = (int32_t) json_object_dotget_number(conf_obj, param_name);
             // TODO: handle individual SF enabling and disabling (spread_factor)
-            MSG("INFO: Lora multi-SF channel %i>  radio %i, IF %i Hz, 125 kHz bw, SF 7 to 12\n", i, ifconf.rf_chain, ifconf.freq_hz);
+            MSG("INFO: Lora multi-SF channel %i>  radio %i, IF %i Hz, 125 kHz bw, SF 7 to 12\n", i, ifconf.rf_chain,
+                ifconf.freq_hz);
         }
         /* all parameters parsed, submitting configuration to the HAL */
         if (lgw_rxif_setconf(i, ifconf) != LGW_HAL_SUCCESS) {
@@ -577,33 +605,54 @@ static int parse_SX1301_configuration(const char * conf_file) {
     } else {
         val = json_object_dotget_value(conf_obj, "chan_Lora_std.enable");
         if (json_value_get_type(val) == JSONBoolean) {
-            ifconf.enable = (bool)json_value_get_boolean(val);
+            ifconf.enable = (bool) json_value_get_boolean(val);
         } else {
             ifconf.enable = false;
         }
         if (ifconf.enable == false) {
             MSG("INFO: Lora standard channel %i disabled\n", i);
-        } else  {
-            ifconf.rf_chain = (uint32_t)json_object_dotget_number(conf_obj, "chan_Lora_std.radio");
-            ifconf.freq_hz = (int32_t)json_object_dotget_number(conf_obj, "chan_Lora_std.if");
-            bw = (uint32_t)json_object_dotget_number(conf_obj, "chan_Lora_std.bandwidth");
-            switch(bw) {
-                case 500000: ifconf.bandwidth = BW_500KHZ; break;
-                case 250000: ifconf.bandwidth = BW_250KHZ; break;
-                case 125000: ifconf.bandwidth = BW_125KHZ; break;
-                default: ifconf.bandwidth = BW_UNDEFINED;
+        } else {
+            ifconf.rf_chain = (uint32_t) json_object_dotget_number(conf_obj, "chan_Lora_std.radio");
+            ifconf.freq_hz = (int32_t) json_object_dotget_number(conf_obj, "chan_Lora_std.if");
+            bw = (uint32_t) json_object_dotget_number(conf_obj, "chan_Lora_std.bandwidth");
+            switch (bw) {
+                case 500000:
+                    ifconf.bandwidth = BW_500KHZ;
+                    break;
+                case 250000:
+                    ifconf.bandwidth = BW_250KHZ;
+                    break;
+                case 125000:
+                    ifconf.bandwidth = BW_125KHZ;
+                    break;
+                default:
+                    ifconf.bandwidth = BW_UNDEFINED;
             }
-            sf = (uint32_t)json_object_dotget_number(conf_obj, "chan_Lora_std.spread_factor");
-            switch(sf) {
-                case  7: ifconf.datarate = DR_LORA_SF7;  break;
-                case  8: ifconf.datarate = DR_LORA_SF8;  break;
-                case  9: ifconf.datarate = DR_LORA_SF9;  break;
-                case 10: ifconf.datarate = DR_LORA_SF10; break;
-                case 11: ifconf.datarate = DR_LORA_SF11; break;
-                case 12: ifconf.datarate = DR_LORA_SF12; break;
-                default: ifconf.datarate = DR_UNDEFINED;
+            sf = (uint32_t) json_object_dotget_number(conf_obj, "chan_Lora_std.spread_factor");
+            switch (sf) {
+                case 7:
+                    ifconf.datarate = DR_LORA_SF7;
+                    break;
+                case 8:
+                    ifconf.datarate = DR_LORA_SF8;
+                    break;
+                case 9:
+                    ifconf.datarate = DR_LORA_SF9;
+                    break;
+                case 10:
+                    ifconf.datarate = DR_LORA_SF10;
+                    break;
+                case 11:
+                    ifconf.datarate = DR_LORA_SF11;
+                    break;
+                case 12:
+                    ifconf.datarate = DR_LORA_SF12;
+                    break;
+                default:
+                    ifconf.datarate = DR_UNDEFINED;
             }
-            MSG("INFO: Lora std channel> radio %i, IF %i Hz, %u Hz bw, SF %u\n", ifconf.rf_chain, ifconf.freq_hz, bw, sf);
+            MSG("INFO: Lora std channel> radio %i, IF %i Hz, %u Hz bw, SF %u\n", ifconf.rf_chain, ifconf.freq_hz, bw,
+                sf);
         }
         if (lgw_rxif_setconf(8, ifconf) != LGW_HAL_SUCCESS) {
             MSG("ERROR: invalid configuration for Lora standard channel\n");
@@ -619,34 +668,35 @@ static int parse_SX1301_configuration(const char * conf_file) {
     } else {
         val = json_object_dotget_value(conf_obj, "chan_FSK.enable");
         if (json_value_get_type(val) == JSONBoolean) {
-            ifconf.enable = (bool)json_value_get_boolean(val);
+            ifconf.enable = (bool) json_value_get_boolean(val);
         } else {
             ifconf.enable = false;
         }
         if (ifconf.enable == false) {
             MSG("INFO: FSK channel %i disabled\n", i);
-        } else  {
-            ifconf.rf_chain = (uint32_t)json_object_dotget_number(conf_obj, "chan_FSK.radio");
-            ifconf.freq_hz = (int32_t)json_object_dotget_number(conf_obj, "chan_FSK.if");
-            bw = (uint32_t)json_object_dotget_number(conf_obj, "chan_FSK.bandwidth");
-            fdev = (uint32_t)json_object_dotget_number(conf_obj, "chan_FSK.freq_deviation");
-            ifconf.datarate = (uint32_t)json_object_dotget_number(conf_obj, "chan_FSK.datarate");
+        } else {
+            ifconf.rf_chain = (uint32_t) json_object_dotget_number(conf_obj, "chan_FSK.radio");
+            ifconf.freq_hz = (int32_t) json_object_dotget_number(conf_obj, "chan_FSK.if");
+            bw = (uint32_t) json_object_dotget_number(conf_obj, "chan_FSK.bandwidth");
+            fdev = (uint32_t) json_object_dotget_number(conf_obj, "chan_FSK.freq_deviation");
+            ifconf.datarate = (uint32_t) json_object_dotget_number(conf_obj, "chan_FSK.datarate");
 
             /* if chan_FSK.bandwidth is set, it has priority over chan_FSK.freq_deviation */
             if ((bw == 0) && (fdev != 0)) {
                 bw = 2 * fdev + ifconf.datarate;
             }
-            if      (bw == 0)      ifconf.bandwidth = BW_UNDEFINED;
-            else if (bw <= 7800)   ifconf.bandwidth = BW_7K8HZ;
-            else if (bw <= 15600)  ifconf.bandwidth = BW_15K6HZ;
-            else if (bw <= 31200)  ifconf.bandwidth = BW_31K2HZ;
-            else if (bw <= 62500)  ifconf.bandwidth = BW_62K5HZ;
+            if (bw == 0) ifconf.bandwidth = BW_UNDEFINED;
+            else if (bw <= 7800) ifconf.bandwidth = BW_7K8HZ;
+            else if (bw <= 15600) ifconf.bandwidth = BW_15K6HZ;
+            else if (bw <= 31200) ifconf.bandwidth = BW_31K2HZ;
+            else if (bw <= 62500) ifconf.bandwidth = BW_62K5HZ;
             else if (bw <= 125000) ifconf.bandwidth = BW_125KHZ;
             else if (bw <= 250000) ifconf.bandwidth = BW_250KHZ;
             else if (bw <= 500000) ifconf.bandwidth = BW_500KHZ;
             else ifconf.bandwidth = BW_UNDEFINED;
 
-            MSG("INFO: FSK channel> radio %i, IF %i Hz, %u Hz bw, %u bps datarate\n", ifconf.rf_chain, ifconf.freq_hz, bw, ifconf.datarate);
+            MSG("INFO: FSK channel> radio %i, IF %i Hz, %u Hz bw, %u bps datarate\n", ifconf.rf_chain, ifconf.freq_hz,
+                bw, ifconf.datarate);
         }
         if (lgw_rxif_setconf(9, ifconf) != LGW_HAL_SUCCESS) {
             MSG("ERROR: invalid configuration for FSK channel\n");
@@ -658,7 +708,7 @@ static int parse_SX1301_configuration(const char * conf_file) {
     return 0;
 }
 
-static int parse_gateway_configuration(const char * conf_file) {
+static int parse_gateway_configuration(const char *conf_file) {
     const char conf_obj_name[] = "gateway_conf";
     JSON_Value *root_val;
     JSON_Object *conf_obj = NULL;
@@ -700,50 +750,50 @@ static int parse_gateway_configuration(const char * conf_file) {
     /* get up and down ports (optional) */
     val = json_object_get_value(conf_obj, "serv_port_up");
     if (val != NULL) {
-        snprintf(serv_port_up, sizeof serv_port_up, "%u", (uint16_t)json_value_get_number(val));
+        snprintf(serv_port_up, sizeof serv_port_up, "%u", (uint16_t) json_value_get_number(val));
         MSG("INFO: upstream port is configured to \"%s\"\n", serv_port_up);
     }
     val = json_object_get_value(conf_obj, "serv_port_down");
     if (val != NULL) {
-        snprintf(serv_port_down, sizeof serv_port_down, "%u", (uint16_t)json_value_get_number(val));
+        snprintf(serv_port_down, sizeof serv_port_down, "%u", (uint16_t) json_value_get_number(val));
         MSG("INFO: downstream port is configured to \"%s\"\n", serv_port_down);
     }
 
     /* get keep-alive interval (in seconds) for downstream (optional) */
     val = json_object_get_value(conf_obj, "keepalive_interval");
     if (val != NULL) {
-        keepalive_time = (int)json_value_get_number(val);
+        keepalive_time = (int) json_value_get_number(val);
         MSG("INFO: downstream keep-alive interval is configured to %u seconds\n", keepalive_time);
     }
 
     /* get interval (in seconds) for statistics display (optional) */
     val = json_object_get_value(conf_obj, "stat_interval");
     if (val != NULL) {
-        stat_interval = (unsigned)json_value_get_number(val);
+        stat_interval = (unsigned) json_value_get_number(val);
         MSG("INFO: statistics display interval is configured to %u seconds\n", stat_interval);
     }
 
     /* get time-out value (in ms) for upstream datagrams (optional) */
     val = json_object_get_value(conf_obj, "push_timeout_ms");
     if (val != NULL) {
-        push_timeout_half.tv_usec = 500 * (long int)json_value_get_number(val);
-        MSG("INFO: upstream PUSH_DATA time-out is configured to %u ms\n", (unsigned)(push_timeout_half.tv_usec / 500));
+        push_timeout_half.tv_usec = 500 * (long int) json_value_get_number(val);
+        MSG("INFO: upstream PUSH_DATA time-out is configured to %u ms\n", (unsigned) (push_timeout_half.tv_usec / 500));
     }
 
     /* packet filtering parameters */
     val = json_object_get_value(conf_obj, "forward_crc_valid");
     if (json_value_get_type(val) == JSONBoolean) {
-        fwd_valid_pkt = (bool)json_value_get_boolean(val);
+        fwd_valid_pkt = (bool) json_value_get_boolean(val);
     }
     MSG("INFO: packets received with a valid CRC will%s be forwarded\n", (fwd_valid_pkt ? "" : " NOT"));
     val = json_object_get_value(conf_obj, "forward_crc_error");
     if (json_value_get_type(val) == JSONBoolean) {
-        fwd_error_pkt = (bool)json_value_get_boolean(val);
+        fwd_error_pkt = (bool) json_value_get_boolean(val);
     }
     MSG("INFO: packets received with a CRC error will%s be forwarded\n", (fwd_error_pkt ? "" : " NOT"));
     val = json_object_get_value(conf_obj, "forward_crc_disabled");
     if (json_value_get_type(val) == JSONBoolean) {
-        fwd_nocrc_pkt = (bool)json_value_get_boolean(val);
+        fwd_nocrc_pkt = (bool) json_value_get_boolean(val);
     }
     MSG("INFO: packets received with no CRC will%s be forwarded\n", (fwd_nocrc_pkt ? "" : " NOT"));
 
@@ -757,24 +807,24 @@ static int parse_gateway_configuration(const char * conf_file) {
     /* get reference coordinates */
     val = json_object_get_value(conf_obj, "ref_latitude");
     if (val != NULL) {
-        reference_coord.lat = (double)json_value_get_number(val);
+        reference_coord.lat = (double) json_value_get_number(val);
         MSG("INFO: Reference latitude is configured to %f deg\n", reference_coord.lat);
     }
     val = json_object_get_value(conf_obj, "ref_longitude");
     if (val != NULL) {
-        reference_coord.lon = (double)json_value_get_number(val);
+        reference_coord.lon = (double) json_value_get_number(val);
         MSG("INFO: Reference longitude is configured to %f deg\n", reference_coord.lon);
     }
     val = json_object_get_value(conf_obj, "ref_altitude");
     if (val != NULL) {
-        reference_coord.alt = (short)json_value_get_number(val);
+        reference_coord.alt = (short) json_value_get_number(val);
         MSG("INFO: Reference altitude is configured to %i meters\n", reference_coord.alt);
     }
 
     /* Gateway GPS coordinates hardcoding (aka. faking) option */
     val = json_object_get_value(conf_obj, "fake_gps");
     if (json_value_get_type(val) == JSONBoolean) {
-        gps_fake_enable = (bool)json_value_get_boolean(val);
+        gps_fake_enable = (bool) json_value_get_boolean(val);
         if (gps_fake_enable == true) {
             MSG("INFO: fake GPS is enabled\n");
         } else {
@@ -785,7 +835,7 @@ static int parse_gateway_configuration(const char * conf_file) {
     /* Beacon signal period (optional) */
     val = json_object_get_value(conf_obj, "beacon_period");
     if (val != NULL) {
-        beacon_period = (uint32_t)json_value_get_number(val);
+        beacon_period = (uint32_t) json_value_get_number(val);
         if ((beacon_period > 0) && (beacon_period < 6)) {
             MSG("ERROR: invalid configuration for Beacon period, must be >= 6s\n");
             return -1;
@@ -797,49 +847,49 @@ static int parse_gateway_configuration(const char * conf_file) {
     /* Beacon TX frequency (optional) */
     val = json_object_get_value(conf_obj, "beacon_freq_hz");
     if (val != NULL) {
-        beacon_freq_hz = (uint32_t)json_value_get_number(val);
+        beacon_freq_hz = (uint32_t) json_value_get_number(val);
         MSG("INFO: Beaconing signal will be emitted at %u Hz\n", beacon_freq_hz);
     }
 
     /* Number of beacon channels (optional) */
     val = json_object_get_value(conf_obj, "beacon_freq_nb");
     if (val != NULL) {
-        beacon_freq_nb = (uint8_t)json_value_get_number(val);
+        beacon_freq_nb = (uint8_t) json_value_get_number(val);
         MSG("INFO: Beaconing channel number is set to %u\n", beacon_freq_nb);
     }
 
     /* Frequency step between beacon channels (optional) */
     val = json_object_get_value(conf_obj, "beacon_freq_step");
     if (val != NULL) {
-        beacon_freq_step = (uint32_t)json_value_get_number(val);
+        beacon_freq_step = (uint32_t) json_value_get_number(val);
         MSG("INFO: Beaconing channel frequency step is set to %uHz\n", beacon_freq_step);
     }
 
     /* Beacon datarate (optional) */
     val = json_object_get_value(conf_obj, "beacon_datarate");
     if (val != NULL) {
-        beacon_datarate = (uint8_t)json_value_get_number(val);
+        beacon_datarate = (uint8_t) json_value_get_number(val);
         MSG("INFO: Beaconing datarate is set to SF%d\n", beacon_datarate);
     }
 
     /* Beacon modulation bandwidth (optional) */
     val = json_object_get_value(conf_obj, "beacon_bw_hz");
     if (val != NULL) {
-        beacon_bw_hz = (uint32_t)json_value_get_number(val);
+        beacon_bw_hz = (uint32_t) json_value_get_number(val);
         MSG("INFO: Beaconing modulation bandwidth is set to %dHz\n", beacon_bw_hz);
     }
 
     /* Beacon TX power (optional) */
     val = json_object_get_value(conf_obj, "beacon_power");
     if (val != NULL) {
-        beacon_power = (int8_t)json_value_get_number(val);
+        beacon_power = (int8_t) json_value_get_number(val);
         MSG("INFO: Beaconing TX power is set to %ddBm\n", beacon_power);
     }
 
     /* Beacon information descriptor (optional) */
     val = json_object_get_value(conf_obj, "beacon_infodesc");
     if (val != NULL) {
-        beacon_infodesc = (uint8_t)json_value_get_number(val);
+        beacon_infodesc = (uint8_t) json_value_get_number(val);
         MSG("INFO: Beaconing information descriptor is set to %u\n", beacon_infodesc);
     }
 
@@ -847,7 +897,7 @@ static int parse_gateway_configuration(const char * conf_file) {
     /* 在XXX个未收到PULL_DATA的确认包后自动退出 */
     val = json_object_get_value(conf_obj, "autoquit_threshold");
     if (val != NULL) {
-        autoquit_threshold = (uint32_t)json_value_get_number(val);
+        autoquit_threshold = (uint32_t) json_value_get_number(val);
         MSG("INFO: Auto-quit after %u non-acknowledged PULL_DATA\n", autoquit_threshold);
     }
 
@@ -856,20 +906,20 @@ static int parse_gateway_configuration(const char * conf_file) {
     return 0;
 }
 
-static uint16_t crc16(const uint8_t * data, unsigned size) {
+static uint16_t crc16(const uint8_t *data, unsigned size) {
     const uint16_t crc_poly = 0x1021;
     const uint16_t init_val = 0x0000;
     uint16_t x = init_val;
     unsigned i, j;
 
-    if (data == NULL)  {
+    if (data == NULL) {
         return 0;
     }
 
-    for (i=0; i<size; ++i) {
-        x ^= (uint16_t)data[i] << 8;
-        for (j=0; j<8; ++j) {
-            x = (x & 0x8000) ? (x<<1) ^ crc_poly : (x<<1);
+    for (i = 0; i < size; ++i) {
+        x ^= (uint16_t) data[i] << 8;
+        for (j = 0; j < 8; ++j) {
+            x = (x & 0x8000) ? (x << 1) ^ crc_poly : (x << 1);
         }
     }
 
@@ -879,8 +929,8 @@ static uint16_t crc16(const uint8_t * data, unsigned size) {
 static double difftimespec(struct timespec end, struct timespec beginning) {
     double x;
 
-    x = 1E-9 * (double)(end.tv_nsec - beginning.tv_nsec);
-    x += (double)(end.tv_sec - beginning.tv_sec);
+    x = 1E-9 * (double) (end.tv_nsec - beginning.tv_nsec);
+    x += (double) (end.tv_sec - beginning.tv_sec);
 
     return x;
 }
@@ -898,23 +948,23 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
     buff_ack[1] = token_h;
     buff_ack[2] = token_l;
     buff_ack[3] = PKT_TX_ACK;
-    *(uint32_t *)(buff_ack + 4) = net_mac_h;
-    *(uint32_t *)(buff_ack + 8) = net_mac_l;
+    *(uint32_t *) (buff_ack + 4) = net_mac_h;
+    *(uint32_t *) (buff_ack + 8) = net_mac_l;
     buff_index = 12; /* 12-byte header */
 
     /* Put no JSON string if there is nothing to report */
     if (error != JIT_ERROR_OK) {
         /* start of JSON structure */
-        memcpy((void *)(buff_ack + buff_index), (void *)"{\"txpk_ack\":{", 13);
+        memcpy((void *) (buff_ack + buff_index), (void *) "{\"txpk_ack\":{", 13);
         buff_index += 13;
         /* set downlink error/warning status in JSON structure */
-        switch( error ) {
+        switch (error) {
             case JIT_ERROR_TX_POWER:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"warn\":", 7);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"warn\":", 7);
                 buff_index += 7;
                 break;
             default:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"error\":", 8);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"error\":", 8);
                 buff_index += 8;
                 break;
         }
@@ -922,7 +972,7 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
         switch (error) {
             case JIT_ERROR_FULL:
             case JIT_ERROR_COLLISION_PACKET:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"COLLISION_PACKET\"", 18);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"COLLISION_PACKET\"", 18);
                 buff_index += 18;
                 /* update stats */
                 pthread_mutex_lock(&mx_meas_dw);
@@ -930,7 +980,7 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
                 pthread_mutex_unlock(&mx_meas_dw);
                 break;
             case JIT_ERROR_TOO_LATE:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"TOO_LATE\"", 10);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"TOO_LATE\"", 10);
                 buff_index += 10;
                 /* update stats */
                 pthread_mutex_lock(&mx_meas_dw);
@@ -938,7 +988,7 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
                 pthread_mutex_unlock(&mx_meas_dw);
                 break;
             case JIT_ERROR_TOO_EARLY:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"TOO_EARLY\"", 11);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"TOO_EARLY\"", 11);
                 buff_index += 11;
                 /* update stats */
                 pthread_mutex_lock(&mx_meas_dw);
@@ -946,7 +996,7 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
                 pthread_mutex_unlock(&mx_meas_dw);
                 break;
             case JIT_ERROR_COLLISION_BEACON:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"COLLISION_BEACON\"", 18);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"COLLISION_BEACON\"", 18);
                 buff_index += 18;
                 /* update stats */
                 pthread_mutex_lock(&mx_meas_dw);
@@ -954,26 +1004,27 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
                 pthread_mutex_unlock(&mx_meas_dw);
                 break;
             case JIT_ERROR_TX_FREQ:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"TX_FREQ\"", 9);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"TX_FREQ\"", 9);
                 buff_index += 9;
                 break;
             case JIT_ERROR_TX_POWER:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"TX_POWER\"", 10);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"TX_POWER\"", 10);
                 buff_index += 10;
                 break;
             case JIT_ERROR_GPS_UNLOCKED:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"GPS_UNLOCKED\"", 14);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"GPS_UNLOCKED\"", 14);
                 buff_index += 14;
                 break;
             default:
-                memcpy((void *)(buff_ack + buff_index), (void *)"\"UNKNOWN\"", 9);
+                memcpy((void *) (buff_ack + buff_index), (void *) "\"UNKNOWN\"", 9);
                 buff_index += 9;
                 break;
         }
         /* set error/warning details in JSON structure */
         switch (error) {
             case JIT_ERROR_TX_POWER:
-                j = snprintf((char *)(buff_ack + buff_index), ACK_BUFF_SIZE-buff_index, ",\"value\":%d", error_value);
+                j = snprintf((char *) (buff_ack + buff_index), ACK_BUFF_SIZE - buff_index, ",\"value\":%d",
+                             error_value);
                 if (j > 0) {
                     buff_index += j;
                 } else {
@@ -986,27 +1037,26 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
                 break;
         }
         /* end of JSON structure */
-        memcpy((void *)(buff_ack + buff_index), (void *)"}}", 2);
+        memcpy((void *) (buff_ack + buff_index), (void *) "}}", 2);
         buff_index += 2;
     }
 
     buff_ack[buff_index] = 0; /* add string terminator, for safety */
 
     /* send datagram to server */
-    return send(sock_down, (void *)buff_ack, buff_index, 0);
+    return send(sock_down, (void *) buff_ack, buff_index, 0);
 }
 
 /* -------------------------------------------------------------------------- */
 /* --- MAIN FUNCTION -------------------------------------------------------- */
 
-int main(void)
-{
+int main(void) {
     struct sigaction sigact; /* SIGQUIT&SIGINT&SIGTERM signal handling */
     int i; /* loop variable and temporary variable for return value */
     int x;
 
     /* configuration file related */
-    char *global_cfg_path= "global_conf.json"; /* contain global (typ. network-wide) configuration */
+    char *global_cfg_path = "global_conf.json"; /* contain global (typ. network-wide) configuration */
     char *local_cfg_path = "local_conf.json"; /* contain node specific configuration, overwrite global parameters for parameters that are defined in both */
     char *debug_cfg_path = "debug_conf.json"; /* if present, all other configuration files are ignored */
 
@@ -1075,13 +1125,39 @@ int main(void)
     MSG("*** Lora concentrator HAL library version info ***\n%s\n***\n", lgw_version_info());
 
     /* display host endianness */
-    #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-        MSG("INFO: Little endian host\n");
-    #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-        MSG("INFO: Big endian host\n");
-    #else
-        MSG("INFO: Host endianness unknown\n");
-    #endif
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    MSG("INFO: Little endian host\n");
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    MSG("INFO: Big endian host\n");
+#else
+    MSG("INFO: Host endianness unknown\n");
+#endif
+
+    // test base64 encrypt
+    uint8_t payload[255] = "{\"a\":\"b\"}";
+    uint8_t payload_b64[341];
+    memset(payload_b64, 0, sizeof payload_b64);
+    int count = bin_to_b64(payload, strlen(payload), payload_b64, sizeof(payload_b64));
+    payload_b64[count] = 0;
+    MSG("DEBUG:*******************************\n");
+    MSG("DEBUG:count[%d]\n", count);
+    MSG("DEBUG:payload[%d][%s]\n", strlen(payload), payload);
+    MSG("DEBUG:payload_b64[%d][%s]\n", strlen(payload_b64), payload_b64);
+    MSG("DEBUG:*******************************\n");
+
+    // test base64 decrypt
+    uint8_t payload2[255];
+    //uint8_t payload_b64_2[341] = "QDDaAAGI7wiFAJwfAEJ9KtuHEYDIww5xSvof5WZgfV/T6WHgtTe6BNB3LQKTTYwwDtpMUA==";
+    uint8_t payload_b64_2[341] = "QDDaAAHZjqbvAMofANk9KOwPr1NCJBzcBdiwr/NZDbB/yKQsRD93jlDu4Tkx7DHzWjOneQ==";
+    memset(payload2, 0, sizeof(payload2));
+
+    count = b64_to_bin(payload_b64_2, strlen(payload_b64_2), payload2, sizeof(payload2));
+    payload2[count] = 0;
+    MSG("DEBUG:*******************************\n");
+    MSG("DEBUG:count[%d]\n", count);
+    MSG("DEBUG:payload2[%d][%s]\n", strlen(payload2), payload2);
+    MSG("DEBUG:payload_b64_2[%d][%s]\n", strlen(payload_b64_2), payload_b64_2);
+    MSG("DEBUG:*******************************\n");
 
     /* load configuration files */
     if (access(debug_cfg_path, R_OK) == 0) { /* if there is a debug conf, parse only the debug conf */
@@ -1095,7 +1171,8 @@ int main(void)
         if (x != 0) {
             exit(EXIT_FAILURE);
         }
-    } else if (access(global_cfg_path, R_OK) == 0) { /* if there is a global conf, parse it and then try to parse local conf  */
+    } else if (access(global_cfg_path, R_OK) ==
+               0) { /* if there is a global conf, parse it and then try to parse local conf  */
         MSG("INFO: found global configuration file %s, parsing it\n", global_cfg_path);
         x = parse_SX1301_configuration(global_cfg_path);
         if (x != 0) {
@@ -1122,7 +1199,8 @@ int main(void)
             exit(EXIT_FAILURE);
         }
     } else {
-        MSG("ERROR: [main] failed to find any configuration file named %s, %s OR %s\n", global_cfg_path, local_cfg_path, debug_cfg_path);
+        MSG("ERROR: [main] failed to find any configuration file named %s, %s OR %s\n", global_cfg_path, local_cfg_path,
+            debug_cfg_path);
         exit(EXIT_FAILURE);
     }
 
@@ -1147,8 +1225,8 @@ int main(void)
     // TODO
 
     /* process some of the configuration variables */
-    net_mac_h = htonl((uint32_t)(0xFFFFFFFF & (lgwm>>32)));
-    net_mac_l = htonl((uint32_t)(0xFFFFFFFF &  lgwm  ));
+    net_mac_h = htonl((uint32_t) (0xFFFFFFFF & (lgwm >> 32)));
+    net_mac_l = htonl((uint32_t) (0xFFFFFFFF & lgwm));
 
     /* prepare hints to open network sockets */
     memset(&hints, 0, sizeof hints);
@@ -1163,16 +1241,17 @@ int main(void)
     }
 
     /* try to open socket for upstream traffic */
-    for (q=result; q!=NULL; q=q->ai_next) {
-        sock_up = socket(q->ai_family, q->ai_socktype,q->ai_protocol);
+    for (q = result; q != NULL; q = q->ai_next) {
+        sock_up = socket(q->ai_family, q->ai_socktype, q->ai_protocol);
         if (sock_up == -1) continue; /* try next field */
         else break; /* success, get out of loop */
     }
     if (q == NULL) {
         MSG("ERROR: [up] failed to open socket to any of server %s addresses (port %s)\n", serv_addr, serv_port_up);
         i = 1;
-        for (q=result; q!=NULL; q=q->ai_next) {
-            getnameinfo(q->ai_addr, q->ai_addrlen, host_name, sizeof host_name, port_name, sizeof port_name, NI_NUMERICHOST);
+        for (q = result; q != NULL; q = q->ai_next) {
+            getnameinfo(q->ai_addr, q->ai_addrlen, host_name, sizeof host_name, port_name, sizeof port_name,
+                        NI_NUMERICHOST);
             MSG("INFO: [up] result %i host:%s service:%s\n", i, host_name, port_name);
             ++i;
         }
@@ -1190,21 +1269,23 @@ int main(void)
     /* look for server address w/ downstream port */
     i = getaddrinfo(serv_addr, serv_port_down, &hints, &result);
     if (i != 0) {
-        MSG("ERROR: [down] getaddrinfo on address %s (port %s) returned %s\n", serv_addr, serv_port_up, gai_strerror(i));
+        MSG("ERROR: [down] getaddrinfo on address %s (port %s) returned %s\n", serv_addr, serv_port_up,
+            gai_strerror(i));
         exit(EXIT_FAILURE);
     }
 
     /* try to open socket for downstream traffic */
-    for (q=result; q!=NULL; q=q->ai_next) {
-        sock_down = socket(q->ai_family, q->ai_socktype,q->ai_protocol);
+    for (q = result; q != NULL; q = q->ai_next) {
+        sock_down = socket(q->ai_family, q->ai_socktype, q->ai_protocol);
         if (sock_down == -1) continue; /* try next field */
         else break; /* success, get out of loop */
     }
     if (q == NULL) {
         MSG("ERROR: [down] failed to open socket to any of server %s addresses (port %s)\n", serv_addr, serv_port_up);
         i = 1;
-        for (q=result; q!=NULL; q=q->ai_next) {
-            getnameinfo(q->ai_addr, q->ai_addrlen, host_name, sizeof host_name, port_name, sizeof port_name, NI_NUMERICHOST);
+        for (q = result; q != NULL; q = q->ai_next) {
+            getnameinfo(q->ai_addr, q->ai_addrlen, host_name, sizeof host_name, port_name, sizeof port_name,
+                        NI_NUMERICHOST);
             MSG("INFO: [down] result %i host:%s service:%s\n", i, host_name, port_name);
             ++i;
         }
@@ -1229,22 +1310,22 @@ int main(void)
     }
 
     /* spawn threads to manage upstream and downstream */
-    i = pthread_create( &thrid_up, NULL, (void * (*)(void *))thread_up, NULL);
+    i = pthread_create(&thrid_up, NULL, (void *(*)(void *)) thread_up, NULL);
     if (i != 0) {
         MSG("ERROR: [main] impossible to create upstream thread\n");
         exit(EXIT_FAILURE);
     }
-    i = pthread_create( &thrid_down, NULL, (void * (*)(void *))thread_down, NULL);
+    i = pthread_create(&thrid_down, NULL, (void *(*)(void *)) thread_down, NULL);
     if (i != 0) {
         MSG("ERROR: [main] impossible to create downstream thread\n");
         exit(EXIT_FAILURE);
     }
-    i = pthread_create( &thrid_jit, NULL, (void * (*)(void *))thread_jit, NULL);
+    i = pthread_create(&thrid_jit, NULL, (void *(*)(void *)) thread_jit, NULL);
     if (i != 0) {
         MSG("ERROR: [main] impossible to create JIT thread\n");
         exit(EXIT_FAILURE);
     }
-    i = pthread_create( &thrid_timersync, NULL, (void * (*)(void *))thread_timersync, NULL);
+    i = pthread_create(&thrid_timersync, NULL, (void *(*)(void *)) thread_timersync, NULL);
     if (i != 0) {
         MSG("ERROR: [main] impossible to create Timer Sync thread\n");
         exit(EXIT_FAILURE);
@@ -1252,12 +1333,12 @@ int main(void)
 
     /* spawn thread to manage GPS */
     if (gps_enabled == true) {
-        i = pthread_create( &thrid_gps, NULL, (void * (*)(void *))thread_gps, NULL);
+        i = pthread_create(&thrid_gps, NULL, (void *(*)(void *)) thread_gps, NULL);
         if (i != 0) {
             MSG("ERROR: [main] impossible to create GPS thread\n");
             exit(EXIT_FAILURE);
         }
-        i = pthread_create( &thrid_valid, NULL, (void * (*)(void *))thread_valid, NULL);
+        i = pthread_create(&thrid_valid, NULL, (void *(*)(void *)) thread_valid, NULL);
         if (i != 0) {
             MSG("ERROR: [main] impossible to create validation thread\n");
             exit(EXIT_FAILURE);
@@ -1283,15 +1364,15 @@ int main(void)
 
         /* access upstream statistics, copy and reset them */
         pthread_mutex_lock(&mx_meas_up);
-        cp_nb_rx_rcv       = meas_nb_rx_rcv;
-        cp_nb_rx_ok        = meas_nb_rx_ok;
-        cp_nb_rx_bad       = meas_nb_rx_bad;
-        cp_nb_rx_nocrc     = meas_nb_rx_nocrc;
-        cp_up_pkt_fwd      = meas_up_pkt_fwd;
+        cp_nb_rx_rcv = meas_nb_rx_rcv;
+        cp_nb_rx_ok = meas_nb_rx_ok;
+        cp_nb_rx_bad = meas_nb_rx_bad;
+        cp_nb_rx_nocrc = meas_nb_rx_nocrc;
+        cp_up_pkt_fwd = meas_up_pkt_fwd;
         cp_up_network_byte = meas_up_network_byte;
         cp_up_payload_byte = meas_up_payload_byte;
-        cp_up_dgram_sent   = meas_up_dgram_sent;
-        cp_up_ack_rcv      = meas_up_ack_rcv;
+        cp_up_dgram_sent = meas_up_dgram_sent;
+        cp_up_ack_rcv = meas_up_ack_rcv;
         meas_nb_rx_rcv = 0;
         meas_nb_rx_ok = 0;
         meas_nb_rx_bad = 0;
@@ -1303,37 +1384,37 @@ int main(void)
         meas_up_ack_rcv = 0;
         pthread_mutex_unlock(&mx_meas_up);
         if (cp_nb_rx_rcv > 0) {
-            rx_ok_ratio = (float)cp_nb_rx_ok / (float)cp_nb_rx_rcv;
-            rx_bad_ratio = (float)cp_nb_rx_bad / (float)cp_nb_rx_rcv;
-            rx_nocrc_ratio = (float)cp_nb_rx_nocrc / (float)cp_nb_rx_rcv;
+            rx_ok_ratio = (float) cp_nb_rx_ok / (float) cp_nb_rx_rcv;
+            rx_bad_ratio = (float) cp_nb_rx_bad / (float) cp_nb_rx_rcv;
+            rx_nocrc_ratio = (float) cp_nb_rx_nocrc / (float) cp_nb_rx_rcv;
         } else {
             rx_ok_ratio = 0.0;
             rx_bad_ratio = 0.0;
             rx_nocrc_ratio = 0.0;
         }
         if (cp_up_dgram_sent > 0) {
-            up_ack_ratio = (float)cp_up_ack_rcv / (float)cp_up_dgram_sent;
+            up_ack_ratio = (float) cp_up_ack_rcv / (float) cp_up_dgram_sent;
         } else {
             up_ack_ratio = 0.0;
         }
 
         /* access downstream statistics, copy and reset them */
         pthread_mutex_lock(&mx_meas_dw);
-        cp_dw_pull_sent    =  meas_dw_pull_sent;
-        cp_dw_ack_rcv      =  meas_dw_ack_rcv;
-        cp_dw_dgram_rcv    =  meas_dw_dgram_rcv;
-        cp_dw_network_byte =  meas_dw_network_byte;
-        cp_dw_payload_byte =  meas_dw_payload_byte;
-        cp_nb_tx_ok        =  meas_nb_tx_ok;
-        cp_nb_tx_fail      =  meas_nb_tx_fail;
-        cp_nb_tx_requested                 +=  meas_nb_tx_requested;
-        cp_nb_tx_rejected_collision_packet +=  meas_nb_tx_rejected_collision_packet;
-        cp_nb_tx_rejected_collision_beacon +=  meas_nb_tx_rejected_collision_beacon;
-        cp_nb_tx_rejected_too_late         +=  meas_nb_tx_rejected_too_late;
-        cp_nb_tx_rejected_too_early        +=  meas_nb_tx_rejected_too_early;
-        cp_nb_beacon_queued   +=  meas_nb_beacon_queued;
-        cp_nb_beacon_sent     +=  meas_nb_beacon_sent;
-        cp_nb_beacon_rejected +=  meas_nb_beacon_rejected;
+        cp_dw_pull_sent = meas_dw_pull_sent;
+        cp_dw_ack_rcv = meas_dw_ack_rcv;
+        cp_dw_dgram_rcv = meas_dw_dgram_rcv;
+        cp_dw_network_byte = meas_dw_network_byte;
+        cp_dw_payload_byte = meas_dw_payload_byte;
+        cp_nb_tx_ok = meas_nb_tx_ok;
+        cp_nb_tx_fail = meas_nb_tx_fail;
+        cp_nb_tx_requested += meas_nb_tx_requested;
+        cp_nb_tx_rejected_collision_packet += meas_nb_tx_rejected_collision_packet;
+        cp_nb_tx_rejected_collision_beacon += meas_nb_tx_rejected_collision_beacon;
+        cp_nb_tx_rejected_too_late += meas_nb_tx_rejected_too_late;
+        cp_nb_tx_rejected_too_early += meas_nb_tx_rejected_too_early;
+        cp_nb_beacon_queued += meas_nb_beacon_queued;
+        cp_nb_beacon_sent += meas_nb_beacon_sent;
+        cp_nb_beacon_rejected += meas_nb_beacon_rejected;
         meas_dw_pull_sent = 0;
         meas_dw_ack_rcv = 0;
         meas_dw_dgram_rcv = 0;
@@ -1351,7 +1432,7 @@ int main(void)
         meas_nb_beacon_rejected = 0;
         pthread_mutex_unlock(&mx_meas_dw);
         if (cp_dw_pull_sent > 0) {
-            dw_ack_ratio = (float)cp_dw_ack_rcv / (float)cp_dw_pull_sent;
+            dw_ack_ratio = (float) cp_dw_ack_rcv / (float) cp_dw_pull_sent;
         } else {
             dw_ack_ratio = 0.0;
         }
@@ -1373,20 +1454,29 @@ int main(void)
         printf("\n##### %s #####\n", stat_timestamp);
         printf("### [UPSTREAM] ###\n");
         printf("# RF packets received by concentrator: %u\n", cp_nb_rx_rcv);
-        printf("# CRC_OK: %.2f%%, CRC_FAIL: %.2f%%, NO_CRC: %.2f%%\n", 100.0 * rx_ok_ratio, 100.0 * rx_bad_ratio, 100.0 * rx_nocrc_ratio);
+        printf("# CRC_OK: %.2f%%, CRC_FAIL: %.2f%%, NO_CRC: %.2f%%\n", 100.0 * rx_ok_ratio, 100.0 * rx_bad_ratio,
+               100.0 * rx_nocrc_ratio);
         printf("# RF packets forwarded: %u (%u bytes)\n", cp_up_pkt_fwd, cp_up_payload_byte);
         printf("# PUSH_DATA datagrams sent: %u (%u bytes)\n", cp_up_dgram_sent, cp_up_network_byte);
         printf("# PUSH_DATA acknowledged: %.2f%%\n", 100.0 * up_ack_ratio);
         printf("### [DOWNSTREAM] ###\n");
         printf("# PULL_DATA sent: %u (%.2f%% acknowledged)\n", cp_dw_pull_sent, 100.0 * dw_ack_ratio);
         printf("# PULL_RESP(onse) datagrams received: %u (%u bytes)\n", cp_dw_dgram_rcv, cp_dw_network_byte);
-        printf("# RF packets sent to concentrator: %u (%u bytes)\n", (cp_nb_tx_ok+cp_nb_tx_fail), cp_dw_payload_byte);
+        printf("# RF packets sent to concentrator: %u (%u bytes)\n", (cp_nb_tx_ok + cp_nb_tx_fail), cp_dw_payload_byte);
         printf("# TX errors: %u\n", cp_nb_tx_fail);
-        if (cp_nb_tx_requested != 0 ) {
-            printf("# TX rejected (collision packet): %.2f%% (req:%u, rej:%u)\n", 100.0 * cp_nb_tx_rejected_collision_packet / cp_nb_tx_requested, cp_nb_tx_requested, cp_nb_tx_rejected_collision_packet);
-            printf("# TX rejected (collision beacon): %.2f%% (req:%u, rej:%u)\n", 100.0 * cp_nb_tx_rejected_collision_beacon / cp_nb_tx_requested, cp_nb_tx_requested, cp_nb_tx_rejected_collision_beacon);
-            printf("# TX rejected (too late): %.2f%% (req:%u, rej:%u)\n", 100.0 * cp_nb_tx_rejected_too_late / cp_nb_tx_requested, cp_nb_tx_requested, cp_nb_tx_rejected_too_late);
-            printf("# TX rejected (too early): %.2f%% (req:%u, rej:%u)\n", 100.0 * cp_nb_tx_rejected_too_early / cp_nb_tx_requested, cp_nb_tx_requested, cp_nb_tx_rejected_too_early);
+        if (cp_nb_tx_requested != 0) {
+            printf("# TX rejected (collision packet): %.2f%% (req:%u, rej:%u)\n",
+                   100.0 * cp_nb_tx_rejected_collision_packet / cp_nb_tx_requested, cp_nb_tx_requested,
+                   cp_nb_tx_rejected_collision_packet);
+            printf("# TX rejected (collision beacon): %.2f%% (req:%u, rej:%u)\n",
+                   100.0 * cp_nb_tx_rejected_collision_beacon / cp_nb_tx_requested, cp_nb_tx_requested,
+                   cp_nb_tx_rejected_collision_beacon);
+            printf("# TX rejected (too late): %.2f%% (req:%u, rej:%u)\n",
+                   100.0 * cp_nb_tx_rejected_too_late / cp_nb_tx_requested, cp_nb_tx_requested,
+                   cp_nb_tx_rejected_too_late);
+            printf("# TX rejected (too early): %.2f%% (req:%u, rej:%u)\n",
+                   100.0 * cp_nb_tx_rejected_too_early / cp_nb_tx_requested, cp_nb_tx_requested,
+                   cp_nb_tx_rejected_too_early);
         }
         printf("# BEACON queued: %u\n", cp_nb_beacon_queued);
         printf("# BEACON sent so far: %u\n", cp_nb_beacon_sent);
@@ -1401,25 +1491,30 @@ int main(void)
         } else {
             printf("# SX1301 time (PPS): %u\n", trig_tstamp);
         }
-        jit_print_queue (&jit_queue, false, DEBUG_LOG);
+        jit_print_queue(&jit_queue, false, DEBUG_LOG);
         printf("### [GPS] ###\n");
         if (gps_enabled == true) {
             /* no need for mutex, display is not critical */
             if (gps_ref_valid == true) {
-                printf("# Valid time reference (age: %li sec)\n", (long)difftime(time(NULL), time_reference_gps.systime));
+                printf("# Valid time reference (age: %li sec)\n",
+                       (long) difftime(time(NULL), time_reference_gps.systime));
                 printf("# Estimated GPS-derived UTC accuracy %li ns\n", time_reference_gps.utc_acc.tv_nsec);
             } else {
-                printf("# Invalid time reference (age: %li sec)\n", (long)difftime(time(NULL), time_reference_gps.systime));
+                printf("# Invalid time reference (age: %li sec)\n",
+                       (long) difftime(time(NULL), time_reference_gps.systime));
             }
             if (coord_ok == true) {
-                printf("# GPS coordinates: latitude %.6f, longitude %.6f, altitude %i m\n", cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt);
-                printf("# GPS estimated accuracy: horizontal %.1f m, vertical %.1f m\n", cp_gps_coord.eha, cp_gps_coord.eva);
+                printf("# GPS coordinates: latitude %.6f, longitude %.6f, altitude %i m\n", cp_gps_coord.lat,
+                       cp_gps_coord.lon, cp_gps_coord.alt);
+                printf("# GPS estimated accuracy: horizontal %.1f m, vertical %.1f m\n", cp_gps_coord.eha,
+                       cp_gps_coord.eva);
                 printf("# GPS satellites: %d\n", cp_gps_coord.nsv);
             } else {
                 printf("# no valid GPS coordinates available yet\n");
             }
         } else if (gps_fake_enable == true) {
-            printf("# GPS *FAKE* coordinates: latitude %.6f, longitude %.6f, altitude %i m\n", cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt);
+            printf("# GPS *FAKE* coordinates: latitude %.6f, longitude %.6f, altitude %i m\n", cp_gps_coord.lat,
+                   cp_gps_coord.lon, cp_gps_coord.alt);
         } else {
             printf("# GPS sync is disabled\n");
         }
@@ -1428,9 +1523,16 @@ int main(void)
         /* generate a JSON report (will be sent to server by upstream thread) */
         pthread_mutex_lock(&mx_stat_rep);
         if (((gps_enabled == true) && (coord_ok == true)) || (gps_fake_enable == true)) {
-            snprintf(status_report, STATUS_SIZE, "\"stat\":{\"time\":\"%s\",\"tacc\":%li,\"lati\":%.6f,\"long\":%.6f,\"alti\":%i,\"eha\":%.1f,\"eva\":%.1f,\"sats\":%d,\"rxnb\":%u,\"rxok\":%u,\"rxfw\":%u,\"ackr\":%.1f,\"dwnb\":%u,\"txnb\":%u}", stat_timestamp, time_reference_gps.utc_acc.tv_nsec, cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt, cp_gps_coord.eha, cp_gps_coord.eva, cp_gps_coord.nsv,cp_nb_rx_rcv, cp_nb_rx_ok, cp_up_pkt_fwd, 100.0 * up_ack_ratio, cp_dw_dgram_rcv, cp_nb_tx_ok);
+            snprintf(status_report, STATUS_SIZE,
+                     "\"stat\":{\"time\":\"%s\",\"tacc\":%li,\"lati\":%.6f,\"long\":%.6f,\"alti\":%i,\"eha\":%.1f,\"eva\":%.1f,\"sats\":%d,\"rxnb\":%u,\"rxok\":%u,\"rxfw\":%u,\"ackr\":%.1f,\"dwnb\":%u,\"txnb\":%u}",
+                     stat_timestamp, time_reference_gps.utc_acc.tv_nsec, cp_gps_coord.lat, cp_gps_coord.lon,
+                     cp_gps_coord.alt, cp_gps_coord.eha, cp_gps_coord.eva, cp_gps_coord.nsv, cp_nb_rx_rcv, cp_nb_rx_ok,
+                     cp_up_pkt_fwd, 100.0 * up_ack_ratio, cp_dw_dgram_rcv, cp_nb_tx_ok);
         } else {
-            snprintf(status_report, STATUS_SIZE, "\"stat\":{\"time\":\"%s\",\"rxnb\":%u,\"rxok\":%u,\"rxfw\":%u,\"ackr\":%.1f,\"dwnb\":%u,\"txnb\":%u}", stat_timestamp, cp_nb_rx_rcv, cp_nb_rx_ok, cp_up_pkt_fwd, 100.0 * up_ack_ratio, cp_dw_dgram_rcv, cp_nb_tx_ok);
+            snprintf(status_report, STATUS_SIZE,
+                     "\"stat\":{\"time\":\"%s\",\"rxnb\":%u,\"rxok\":%u,\"rxfw\":%u,\"ackr\":%.1f,\"dwnb\":%u,\"txnb\":%u}",
+                     stat_timestamp, cp_nb_rx_rcv, cp_nb_rx_ok, cp_up_pkt_fwd, 100.0 * up_ack_ratio, cp_dw_dgram_rcv,
+                     cp_nb_tx_ok);
         }
         report_ready = true;
         pthread_mutex_unlock(&mx_stat_rep);
@@ -1502,7 +1604,7 @@ void thread_up(void) {
 
     /* GPS synchronization variables */
     struct timespec pkt_utc_time;
-    struct tm * x; /* broken-up UTC time */
+    struct tm *x; /* broken-up UTC time */
     struct timespec pkt_gps_time;
     uint64_t pkt_gps_time_ms;
 
@@ -1514,7 +1616,7 @@ void thread_up(void) {
     uint16_t mote_fcnt = 0;
 
     /* set upstream socket RX timeout */
-    i = setsockopt(sock_up, SOL_SOCKET, SO_RCVTIMEO, (void *)&push_timeout_half, sizeof push_timeout_half);
+    i = setsockopt(sock_up, SOL_SOCKET, SO_RCVTIMEO, (void *) &push_timeout_half, sizeof push_timeout_half);
     if (i != 0) {
         MSG("ERROR: [up] setsockopt returned %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -1523,8 +1625,8 @@ void thread_up(void) {
     /* pre-fill the data buffer with fixed fields */
     buff_up[0] = PROTOCOL_VERSION;
     buff_up[3] = PKT_PUSH_DATA;
-    *(uint32_t *)(buff_up + 4) = net_mac_h;
-    *(uint32_t *)(buff_up + 8) = net_mac_l;
+    *(uint32_t *) (buff_up + 4) = net_mac_h;
+    *(uint32_t *) (buff_up + 8) = net_mac_l;
 
     while (!exit_sig && !quit_sig) {
 
@@ -1558,38 +1660,38 @@ void thread_up(void) {
         }
 
         /* start composing datagram with the header */
-        token_h = (uint8_t)rand(); /* random token */
-        token_l = (uint8_t)rand(); /* random token */
+        token_h = (uint8_t) rand(); /* random token */
+        token_l = (uint8_t) rand(); /* random token */
         buff_up[1] = token_h;
         buff_up[2] = token_l;
         buff_index = 12; /* 12-byte header */
 
         /* start of JSON structure */
-        memcpy((void *)(buff_up + buff_index), (void *)"{\"rxpk\":[", 9);
+        memcpy((void *) (buff_up + buff_index), (void *) "{\"rxpk\":[", 9);
         buff_index += 9;
 
         /* serialize Lora packets metadata and payload */
         pkt_in_dgram = 0;
-        for (i=0; i < nb_pkt; ++i) {
+        for (i = 0; i < nb_pkt; ++i) {
             p = &rxpkt[i];
 
             /* Get mote information from current packet (addr, fcnt) */
             /* FHDR - DevAddr */
-            mote_addr  = p->payload[1];
+            mote_addr = p->payload[1];
             mote_addr |= p->payload[2] << 8;
             mote_addr |= p->payload[3] << 16;
             mote_addr |= p->payload[4] << 24;
             /* FHDR - FCnt */
-            mote_fcnt  = p->payload[6];
+            mote_fcnt = p->payload[6];
             mote_fcnt |= p->payload[7] << 8;
 
             /* basic packet filtering */
             pthread_mutex_lock(&mx_meas_up);
             meas_nb_rx_rcv += 1;
-            switch(p->status) {
+            switch (p->status) {
                 case STAT_CRC_OK:
                     meas_nb_rx_ok += 1;
-                    MSG( "\nINFO: Received pkt from mote: %08X (fcnt=%u)\n", mote_addr, mote_fcnt );
+                    MSG("\nINFO: Received pkt from mote: %08X (fcnt=%u)\n", mote_addr, mote_fcnt);
                     if (!fwd_valid_pkt) {
                         pthread_mutex_unlock(&mx_meas_up);
                         continue; /* skip that packet */
@@ -1610,7 +1712,8 @@ void thread_up(void) {
                     }
                     break;
                 default:
-                    MSG("WARNING: [up] received packet with unknown status %u (size %u, modulation %u, BW %u, DR %u, RSSI %.1f)\n", p->status, p->size, p->modulation, p->bandwidth, p->datarate, p->rssi);
+                    MSG("WARNING: [up] received packet with unknown status %u (size %u, modulation %u, BW %u, DR %u, RSSI %.1f)\n",
+                        p->status, p->size, p->modulation, p->bandwidth, p->datarate, p->rssi);
                     pthread_mutex_unlock(&mx_meas_up);
                     continue; /* skip that packet */
                     // exit(EXIT_FAILURE);
@@ -1625,12 +1728,12 @@ void thread_up(void) {
                 ++buff_index;
             } else {
                 buff_up[buff_index] = ',';
-                buff_up[buff_index+1] = '{';
+                buff_up[buff_index + 1] = '{';
                 buff_index += 2;
             }
 
             /* RAW timestamp, 8-17 useful chars */
-            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, "\"tmst\":%u", p->count_us);
+            j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index, "\"tmst\":%u", p->count_us);
             if (j > 0) {
                 buff_index += j;
             } else {
@@ -1645,7 +1748,10 @@ void thread_up(void) {
                 if (j == LGW_GPS_SUCCESS) {
                     /* split the UNIX timestamp to its calendar components */
                     x = gmtime(&(pkt_utc_time.tv_sec));
-                    j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"time\":\"%04i-%02i-%02iT%02i:%02i:%02i.%06liZ\"", (x->tm_year)+1900, (x->tm_mon)+1, x->tm_mday, x->tm_hour, x->tm_min, x->tm_sec, (pkt_utc_time.tv_nsec)/1000); /* ISO 8601 format */
+                    j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index,
+                                 ",\"time\":\"%04i-%02i-%02iT%02i:%02i:%02i.%06liZ\"", (x->tm_year) + 1900,
+                                 (x->tm_mon) + 1, x->tm_mday, x->tm_hour, x->tm_min, x->tm_sec,
+                                 (pkt_utc_time.tv_nsec) / 1000); /* ISO 8601 format */
                     if (j > 0) {
                         buff_index += j;
                     } else {
@@ -1657,8 +1763,8 @@ void thread_up(void) {
                 j = lgw_cnt2gps(local_ref, p->count_us, &pkt_gps_time);
                 if (j == LGW_GPS_SUCCESS) {
                     pkt_gps_time_ms = pkt_gps_time.tv_sec * 1E3 + pkt_gps_time.tv_nsec / 1E6;
-                    j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"tmms\":%lu",
-                                    pkt_gps_time_ms); /* GPS time in milliseconds since 06.Jan.1980 */
+                    j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index, ",\"tmms\":%lu",
+                                 pkt_gps_time_ms); /* GPS time in milliseconds since 06.Jan.1980 */
                     if (j > 0) {
                         buff_index += j;
                     } else {
@@ -1669,7 +1775,9 @@ void thread_up(void) {
             }
 
             /* Packet concentrator channel, RF chain & RX frequency, 34-36 useful chars */
-            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"chan\":%1u,\"rfch\":%1u,\"freq\":%.6lf", p->if_chain, p->rf_chain, ((double)p->freq_hz / 1e6));
+            j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index,
+                         ",\"chan\":%1u,\"rfch\":%1u,\"freq\":%.6lf", p->if_chain, p->rf_chain,
+                         ((double) p->freq_hz / 1e6));
             if (j > 0) {
                 buff_index += j;
             } else {
@@ -1680,77 +1788,77 @@ void thread_up(void) {
             /* Packet status, 9-10 useful chars */
             switch (p->status) {
                 case STAT_CRC_OK:
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":1", 9);
+                    memcpy((void *) (buff_up + buff_index), (void *) ",\"stat\":1", 9);
                     buff_index += 9;
                     break;
                 case STAT_CRC_BAD:
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":-1", 10);
+                    memcpy((void *) (buff_up + buff_index), (void *) ",\"stat\":-1", 10);
                     buff_index += 10;
                     break;
                 case STAT_NO_CRC:
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":0", 9);
+                    memcpy((void *) (buff_up + buff_index), (void *) ",\"stat\":0", 9);
                     buff_index += 9;
                     break;
                 default:
                     MSG("ERROR: [up] received packet with unknown status\n");
-                    memcpy((void *)(buff_up + buff_index), (void *)",\"stat\":?", 9);
+                    memcpy((void *) (buff_up + buff_index), (void *) ",\"stat\":?", 9);
                     buff_index += 9;
                     exit(EXIT_FAILURE);
             }
 
             /* Packet modulation, 13-14 useful chars */
             if (p->modulation == MOD_LORA) {
-                memcpy((void *)(buff_up + buff_index), (void *)",\"modu\":\"LORA\"", 14);
+                memcpy((void *) (buff_up + buff_index), (void *) ",\"modu\":\"LORA\"", 14);
                 buff_index += 14;
 
                 /* Lora datarate & bandwidth, 16-19 useful chars */
                 switch (p->datarate) {
                     case DR_LORA_SF7:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF7", 12);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"datr\":\"SF7", 12);
                         buff_index += 12;
                         break;
                     case DR_LORA_SF8:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF8", 12);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"datr\":\"SF8", 12);
                         buff_index += 12;
                         break;
                     case DR_LORA_SF9:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF9", 12);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"datr\":\"SF9", 12);
                         buff_index += 12;
                         break;
                     case DR_LORA_SF10:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF10", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"datr\":\"SF10", 13);
                         buff_index += 13;
                         break;
                     case DR_LORA_SF11:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF11", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"datr\":\"SF11", 13);
                         buff_index += 13;
                         break;
                     case DR_LORA_SF12:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF12", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"datr\":\"SF12", 13);
                         buff_index += 13;
                         break;
                     default:
                         MSG("ERROR: [up] lora packet with unknown datarate\n");
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"datr\":\"SF?", 12);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"datr\":\"SF?", 12);
                         buff_index += 12;
                         exit(EXIT_FAILURE);
                 }
                 switch (p->bandwidth) {
                     case BW_125KHZ:
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW125\"", 6);
+                        memcpy((void *) (buff_up + buff_index), (void *) "BW125\"", 6);
                         buff_index += 6;
                         break;
                     case BW_250KHZ:
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW250\"", 6);
+                        memcpy((void *) (buff_up + buff_index), (void *) "BW250\"", 6);
                         buff_index += 6;
                         break;
                     case BW_500KHZ:
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW500\"", 6);
+                        memcpy((void *) (buff_up + buff_index), (void *) "BW500\"", 6);
                         buff_index += 6;
                         break;
                     default:
                         MSG("ERROR: [up] lora packet with unknown bandwidth\n");
-                        memcpy((void *)(buff_up + buff_index), (void *)"BW?\"", 4);
+                        memcpy((void *) (buff_up + buff_index), (void *) "BW?\"", 4);
                         buff_index += 4;
                         exit(EXIT_FAILURE);
                 }
@@ -1758,34 +1866,34 @@ void thread_up(void) {
                 /* Packet ECC coding rate, 11-13 useful chars */
                 switch (p->coderate) {
                     case CR_LORA_4_5:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/5\"", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"codr\":\"4/5\"", 13);
                         buff_index += 13;
                         break;
                     case CR_LORA_4_6:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/6\"", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"codr\":\"4/6\"", 13);
                         buff_index += 13;
                         break;
                     case CR_LORA_4_7:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/7\"", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"codr\":\"4/7\"", 13);
                         buff_index += 13;
                         break;
                     case CR_LORA_4_8:
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"4/8\"", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"codr\":\"4/8\"", 13);
                         buff_index += 13;
                         break;
                     case 0: /* treat the CR0 case (mostly false sync) */
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"OFF\"", 13);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"codr\":\"OFF\"", 13);
                         buff_index += 13;
                         break;
                     default:
                         MSG("ERROR: [up] lora packet with unknown coderate\n");
-                        memcpy((void *)(buff_up + buff_index), (void *)",\"codr\":\"?\"", 11);
+                        memcpy((void *) (buff_up + buff_index), (void *) ",\"codr\":\"?\"", 11);
                         buff_index += 11;
                         exit(EXIT_FAILURE);
                 }
 
                 /* Lora SNR, 11-13 useful chars */
-                j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"lsnr\":%.1f", p->snr);
+                j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index, ",\"lsnr\":%.1f", p->snr);
                 if (j > 0) {
                     buff_index += j;
                 } else {
@@ -1793,11 +1901,11 @@ void thread_up(void) {
                     exit(EXIT_FAILURE);
                 }
             } else if (p->modulation == MOD_FSK) {
-                memcpy((void *)(buff_up + buff_index), (void *)",\"modu\":\"FSK\"", 13);
+                memcpy((void *) (buff_up + buff_index), (void *) ",\"modu\":\"FSK\"", 13);
                 buff_index += 13;
 
                 /* FSK datarate, 11-14 useful chars */
-                j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"datr\":%u", p->datarate);
+                j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index, ",\"datr\":%u", p->datarate);
                 if (j > 0) {
                     buff_index += j;
                 } else {
@@ -1810,7 +1918,8 @@ void thread_up(void) {
             }
 
             /* Packet RSSI, payload size, 18-23 useful chars */
-            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, ",\"rssi\":%.0f,\"size\":%u", p->rssi, p->size);
+            j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index, ",\"rssi\":%.0f,\"size\":%u",
+                         p->rssi, p->size);
             if (j > 0) {
                 buff_index += j;
             } else {
@@ -1819,10 +1928,11 @@ void thread_up(void) {
             }
 
             /* Packet base64-encoded payload, 14-350 useful chars */
-            memcpy((void *)(buff_up + buff_index), (void *)",\"data\":\"", 9);
+            memcpy((void *) (buff_up + buff_index), (void *) ",\"data\":\"", 9);
             buff_index += 9;
-            j = bin_to_b64(p->payload, p->size, (char *)(buff_up + buff_index), 341); /* 255 bytes = 340 chars in b64 + null char */
-            if (j>=0) {
+            j = bin_to_b64(p->payload, p->size, (char *) (buff_up + buff_index),
+                           341); /* 255 bytes = 340 chars in b64 + null char */
+            if (j >= 0) {
                 buff_index += j;
             } else {
                 MSG("ERROR: [up] bin_to_b64 failed line %u\n", (__LINE__ - 5));
@@ -1861,7 +1971,7 @@ void thread_up(void) {
         if (send_report == true) {
             pthread_mutex_lock(&mx_stat_rep);
             report_ready = false;
-            j = snprintf((char *)(buff_up + buff_index), TX_BUFF_SIZE-buff_index, "%s", status_report);
+            j = snprintf((char *) (buff_up + buff_index), TX_BUFF_SIZE - buff_index, "%s", status_report);
             pthread_mutex_unlock(&mx_stat_rep);
             if (j > 0) {
                 buff_index += j;
@@ -1876,18 +1986,18 @@ void thread_up(void) {
         ++buff_index;
         buff_up[buff_index] = 0; /* add string terminator, for safety */
 
-        MSG("\nJSON up: %s\n", (char *)(buff_up + 12)); /* DEBUG: display JSON payload */
+        MSG("\nJSON up: %s\n", (char *) (buff_up + 12)); /* DEBUG: display JSON payload */
 
         /* send datagram to server */
-        send(sock_up, (void *)buff_up, buff_index, 0);
+        send(sock_up, (void *) buff_up, buff_index, 0);
         clock_gettime(CLOCK_MONOTONIC, &send_time);
         pthread_mutex_lock(&mx_meas_up);
         meas_up_dgram_sent += 1;
         meas_up_network_byte += buff_index;
 
         /* wait for acknowledge (in 2 times, to catch extra packets) */
-        for (i=0; i<2; ++i) {
-            j = recv(sock_up, (void *)buff_ack, sizeof buff_ack, 0);
+        for (i = 0; i < 2; ++i) {
+            j = recv(sock_up, (void *) buff_ack, sizeof buff_ack, 0);
             clock_gettime(CLOCK_MONOTONIC, &recv_time);
             if (j == -1) {
                 if (errno == EAGAIN) { /* timeout */
@@ -1902,7 +2012,7 @@ void thread_up(void) {
                 //MSG("WARNING: [up] ignored out-of sync ACK packet\n");
                 continue;
             } else {
-                MSG("INFO: [up] PUSH_ACK received in %i ms\n", (int)(1000 * difftimespec(recv_time, send_time)));
+                MSG("INFO: [up] PUSH_ACK received in %i ms\n", (int) (1000 * difftimespec(recv_time, send_time)));
                 meas_up_ack_rcv += 1;
                 break;
             }
@@ -1915,7 +2025,7 @@ void thread_up(void) {
 /* -------------------------------------------------------------------------- */
 /* --- THREAD 2: POLLING SERVER AND ENQUEUING PACKETS IN JIT QUEUE ---------- */
 
-static int get_tx_gain_lut_index(int8_t rf_power, uint8_t * lut_index) {
+static int get_tx_gain_lut_index(int8_t rf_power, uint8_t *lut_index) {
     uint8_t pow_index;
     int current_best_index = -1;
     uint8_t current_best_match = 0xFF;
@@ -1944,7 +2054,7 @@ static int get_tx_gain_lut_index(int8_t rf_power, uint8_t * lut_index) {
 
     /* Return corresponding index */
     if (current_best_index > -1) {
-        *lut_index = (uint8_t)current_best_index;
+        *lut_index = (uint8_t) current_best_index;
     } else {
         *lut_index = 0;
         MSG("ERROR: %s - failed to find tx gain lut index\n", __FUNCTION__);
@@ -2017,7 +2127,7 @@ void thread_down(void) {
     int32_t warning_value = 0;
 
     /* set downstream socket RX timeout */
-    i = setsockopt(sock_down, SOL_SOCKET, SO_RCVTIMEO, (void *)&pull_timeout, sizeof pull_timeout);
+    i = setsockopt(sock_down, SOL_SOCKET, SO_RCVTIMEO, (void *) &pull_timeout, sizeof pull_timeout);
     if (i != 0) {
         MSG("ERROR: [down] setsockopt returned %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -2026,8 +2136,8 @@ void thread_down(void) {
     /* pre-fill the pull request buffer with fixed fields */
     buff_req[0] = PROTOCOL_VERSION;
     buff_req[3] = PKT_PULL_DATA;
-    *(uint32_t *)(buff_req + 4) = net_mac_h;
-    *(uint32_t *)(buff_req + 8) = net_mac_l;
+    *(uint32_t *) (buff_req + 4) = net_mac_h;
+    *(uint32_t *) (buff_req + 8) = net_mac_l;
 
     /* beacon variables initialization */
     last_beacon_gps_time.tv_sec = 0;
@@ -2084,7 +2194,7 @@ void thread_down(void) {
     beacon_pkt.no_header = true;
 
     /* network common part beacon fields (little endian) */
-    for (i = 0; i < (int)beacon_RFU1_size; i++) {
+    for (i = 0; i < (int) beacon_RFU1_size; i++) {
         beacon_pkt.payload[beacon_pyld_idx++] = 0x0;
     }
 
@@ -2093,36 +2203,36 @@ void thread_down(void) {
     beacon_pyld_idx += 2; /* crc1 (variable), filled later */
 
     /* calculate the latitude and longitude that must be publicly reported */
-    field_latitude = (int32_t)((reference_coord.lat / 90.0) * (double)(1<<23));
-    if (field_latitude > (int32_t)0x007FFFFF) {
-        field_latitude = (int32_t)0x007FFFFF; /* +90 N is represented as 89.99999 N */
-    } else if (field_latitude < (int32_t)0xFF800000) {
-        field_latitude = (int32_t)0xFF800000;
+    field_latitude = (int32_t) ((reference_coord.lat / 90.0) * (double) (1 << 23));
+    if (field_latitude > (int32_t) 0x007FFFFF) {
+        field_latitude = (int32_t) 0x007FFFFF; /* +90 N is represented as 89.99999 N */
+    } else if (field_latitude < (int32_t) 0xFF800000) {
+        field_latitude = (int32_t) 0xFF800000;
     }
-    field_longitude = (int32_t)((reference_coord.lon / 180.0) * (double)(1<<23));
-    if (field_longitude > (int32_t)0x007FFFFF) {
-        field_longitude = (int32_t)0x007FFFFF; /* +180 E is represented as 179.99999 E */
-    } else if (field_longitude < (int32_t)0xFF800000) {
-        field_longitude = (int32_t)0xFF800000;
+    field_longitude = (int32_t) ((reference_coord.lon / 180.0) * (double) (1 << 23));
+    if (field_longitude > (int32_t) 0x007FFFFF) {
+        field_longitude = (int32_t) 0x007FFFFF; /* +180 E is represented as 179.99999 E */
+    } else if (field_longitude < (int32_t) 0xFF800000) {
+        field_longitude = (int32_t) 0xFF800000;
     }
 
     /* gateway specific beacon fields */
     beacon_pkt.payload[beacon_pyld_idx++] = beacon_infodesc;
-    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF &  field_latitude;
-    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (field_latitude >>  8);
+    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & field_latitude;
+    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (field_latitude >> 8);
     beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (field_latitude >> 16);
-    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF &  field_longitude;
-    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (field_longitude >>  8);
+    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & field_longitude;
+    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (field_longitude >> 8);
     beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (field_longitude >> 16);
 
     /* RFU */
-    for (i = 0; i < (int)beacon_RFU2_size; i++) {
+    for (i = 0; i < (int) beacon_RFU2_size; i++) {
         beacon_pkt.payload[beacon_pyld_idx++] = 0x0;
     }
 
     /* CRC of the beacon gateway specific part fields */
     field_crc2 = crc16((beacon_pkt.payload + 6 + beacon_RFU1_size), 7 + beacon_RFU2_size);
-    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF &  field_crc2;
+    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & field_crc2;
     beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (field_crc2 >> 8);
 
     /* JIT queue initialization */
@@ -2138,13 +2248,13 @@ void thread_down(void) {
         }
 
         /* generate random token for request */
-        token_h = (uint8_t)rand(); /* random token */
-        token_l = (uint8_t)rand(); /* random token */
+        token_h = (uint8_t) rand(); /* random token */
+        token_l = (uint8_t) rand(); /* random token */
         buff_req[1] = token_h;
         buff_req[2] = token_l;
 
         /* send PULL request and record time */
-        send(sock_down, (void *)buff_req, sizeof buff_req, 0);
+        send(sock_down, (void *) buff_req, sizeof buff_req, 0);
         clock_gettime(CLOCK_MONOTONIC, &send_time);
         pthread_mutex_lock(&mx_meas_dw);
         meas_dw_pull_sent += 1;
@@ -2154,10 +2264,10 @@ void thread_down(void) {
 
         /* listen to packets and process them until a new PULL request must be sent */
         recv_time = send_time;
-        while ((int)difftimespec(recv_time, send_time) < keepalive_time) {
+        while ((int) difftimespec(recv_time, send_time) < keepalive_time) {
 
             /* try to receive a datagram */
-            msg_len = recv(sock_down, (void *)buff_down, (sizeof buff_down)-1, 0);
+            msg_len = recv(sock_down, (void *) buff_down, (sizeof buff_down) - 1, 0);
             clock_gettime(CLOCK_MONOTONIC, &recv_time);
 
             /* Pre-allocate beacon slots in JiT queue, to check downlink collisions */
@@ -2173,9 +2283,9 @@ void thread_down(void) {
                     /*            with TBeaconDelay = [1.5ms +/- 1µs]*/
                     if (last_beacon_gps_time.tv_sec == 0) {
                         /* if no beacon has been queued, get next slot from current GPS time */
-                        diff_beacon_time = time_reference_gps.gps.tv_sec % ((time_t)beacon_period);
+                        diff_beacon_time = time_reference_gps.gps.tv_sec % ((time_t) beacon_period);
                         next_beacon_gps_time.tv_sec = time_reference_gps.gps.tv_sec +
-                                                        ((time_t)beacon_period - diff_beacon_time);
+                                                      ((time_t) beacon_period - diff_beacon_time);
                     } else {
                         /* if there is already a beacon, take it as reference */
                         next_beacon_gps_time.tv_sec = last_beacon_gps_time.tv_sec + beacon_period;
@@ -2186,14 +2296,14 @@ void thread_down(void) {
 
 #if DEBUG_BEACON
                     {
-                    time_t time_unix;
+                        time_t time_unix;
 
-                    time_unix = time_reference_gps.gps.tv_sec + UNIX_GPS_EPOCH_OFFSET;
-                    MSG_DEBUG(DEBUG_BEACON, "GPS-now : %s", ctime(&time_unix));
-                    time_unix = last_beacon_gps_time.tv_sec + UNIX_GPS_EPOCH_OFFSET;
-                    MSG_DEBUG(DEBUG_BEACON, "GPS-last: %s", ctime(&time_unix));
-                    time_unix = next_beacon_gps_time.tv_sec + UNIX_GPS_EPOCH_OFFSET;
-                    MSG_DEBUG(DEBUG_BEACON, "GPS-next: %s", ctime(&time_unix));
+                        time_unix = time_reference_gps.gps.tv_sec + UNIX_GPS_EPOCH_OFFSET;
+                        MSG_DEBUG(DEBUG_BEACON, "GPS-now : %s", ctime(&time_unix));
+                        time_unix = last_beacon_gps_time.tv_sec + UNIX_GPS_EPOCH_OFFSET;
+                        MSG_DEBUG(DEBUG_BEACON, "GPS-last: %s", ctime(&time_unix));
+                        time_unix = next_beacon_gps_time.tv_sec + UNIX_GPS_EPOCH_OFFSET;
+                        MSG_DEBUG(DEBUG_BEACON, "GPS-next: %s", ctime(&time_unix));
                     }
 #endif
 
@@ -2203,7 +2313,8 @@ void thread_down(void) {
 
                     /* apply frequency correction to beacon TX frequency */
                     if (beacon_freq_nb > 1) {
-                        beacon_chan = (next_beacon_gps_time.tv_sec / beacon_period) % beacon_freq_nb; /* floor rounding */
+                        beacon_chan =
+                                (next_beacon_gps_time.tv_sec / beacon_period) % beacon_freq_nb; /* floor rounding */
                     } else {
                         beacon_chan = 0;
                     }
@@ -2212,8 +2323,8 @@ void thread_down(void) {
 
                     /* load time in beacon payload */
                     beacon_pyld_idx = beacon_RFU1_size;
-                    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF &  next_beacon_gps_time.tv_sec;
-                    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (next_beacon_gps_time.tv_sec >>  8);
+                    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & next_beacon_gps_time.tv_sec;
+                    beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (next_beacon_gps_time.tv_sec >> 8);
                     beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (next_beacon_gps_time.tv_sec >> 16);
                     beacon_pkt.payload[beacon_pyld_idx++] = 0xFF & (next_beacon_gps_time.tv_sec >> 24);
 
@@ -2238,8 +2349,9 @@ void thread_down(void) {
                         last_beacon_gps_time.tv_sec = next_beacon_gps_time.tv_sec; /* keep this beacon time as reference for next one to be programmed */
 
                         /* display beacon payload */
-                        MSG("INFO: Beacon queued (count_us=%u, freq_hz=%u, size=%u):\n", beacon_pkt.count_us, beacon_pkt.freq_hz, beacon_pkt.size);
-                        printf( "   => " );
+                        MSG("INFO: Beacon queued (count_us=%u, freq_hz=%u, size=%u):\n", beacon_pkt.count_us,
+                            beacon_pkt.freq_hz, beacon_pkt.size);
+                        printf("   => ");
                         for (i = 0; i < beacon_pkt.size; ++i) {
                             MSG("%02X ", beacon_pkt.payload[i]);
                         }
@@ -2271,9 +2383,10 @@ void thread_down(void) {
             }
 
             /* if the datagram does not respect protocol, just ignore it */
-            if ((msg_len < 4) || (buff_down[0] != PROTOCOL_VERSION) || ((buff_down[3] != PKT_PULL_RESP) && (buff_down[3] != PKT_PULL_ACK))) {
+            if ((msg_len < 4) || (buff_down[0] != PROTOCOL_VERSION) ||
+                ((buff_down[3] != PKT_PULL_RESP) && (buff_down[3] != PKT_PULL_ACK))) {
                 MSG("WARNING: [down] ignoring invalid packet len=%d, protocol_version=%d, id=%d\n",
-                        msg_len, buff_down[0], buff_down[3]);
+                    msg_len, buff_down[0], buff_down[3]);
                 continue;
             }
 
@@ -2288,7 +2401,8 @@ void thread_down(void) {
                         pthread_mutex_lock(&mx_meas_dw);
                         meas_dw_ack_rcv += 1;
                         pthread_mutex_unlock(&mx_meas_dw);
-                        MSG("INFO: [down] PULL_ACK received in %i ms\n", (int)(1000 * difftimespec(recv_time, send_time)));
+                        MSG("INFO: [down] PULL_ACK received in %i ms\n",
+                            (int) (1000 * difftimespec(recv_time, send_time)));
                     }
                 } else { /* out-of-sync token */
                     MSG("INFO: [down] received out-of-sync ACK\n");
@@ -2299,11 +2413,11 @@ void thread_down(void) {
             /* the datagram is a PULL_RESP */
             buff_down[msg_len] = 0; /* add string terminator, just to be safe */
             MSG("INFO: [down] PULL_RESP received  - token[%d:%d] :)\n", buff_down[1], buff_down[2]); /* very verbose */
-            printf("\nJSON down: %s\n", (char *)(buff_down + 4)); /* DEBUG: display JSON payload */
+            printf("\nJSON down: %s\n", (char *) (buff_down + 4)); /* DEBUG: display JSON payload */
 
             /* initialize TX struct and try to parse JSON */
             memset(&txpkt, 0, sizeof txpkt);
-            root_val = json_parse_string_with_comments((const char *)(buff_down + 4)); /* JSON offset */
+            root_val = json_parse_string_with_comments((const char *) (buff_down + 4)); /* JSON offset */
             if (root_val == NULL) {
                 MSG("WARNING: [down] invalid JSON, TX aborted\n");
                 continue;
@@ -2318,7 +2432,8 @@ void thread_down(void) {
             }
 
             /* Parse "immediate" tag, or target timestamp, or UTC time to be converted by GPS (mandatory) */
-            i = json_object_get_boolean(txpk_obj,"imme"); /* can be 1 if true, 0 if false, or -1 if not a JSON boolean */
+            i = json_object_get_boolean(txpk_obj,
+                                        "imme"); /* can be 1 if true, 0 if false, or -1 if not a JSON boolean */
             if (i == 1) {
                 /* TX procedure: send immediately */
                 sent_immediate = true;
@@ -2326,10 +2441,10 @@ void thread_down(void) {
                 MSG("INFO: [down] a packet will be sent in \"immediate\" mode\n");
             } else {
                 sent_immediate = false;
-                val = json_object_get_value(txpk_obj,"tmst");
+                val = json_object_get_value(txpk_obj, "tmst");
                 if (val != NULL) {
                     /* TX procedure: send on timestamp value */
-                    txpkt.count_us = (uint32_t)json_value_get_number(val);
+                    txpkt.count_us = (uint32_t) json_value_get_number(val);
 
                     /* Concentrator timestamp is given, we consider it is a Class A downlink */
                     downlink_type = JIT_PKT_TYPE_DOWNLINK_CLASS_A;
@@ -2365,12 +2480,12 @@ void thread_down(void) {
                     }
 
                     /* Get GPS time from JSON */
-                    x2 = (uint64_t)json_value_get_number(val);
+                    x2 = (uint64_t) json_value_get_number(val);
 
                     /* Convert GPS time from milliseconds to timespec */
-                    x3 = modf((double)x2/1E3, &x4);
-                    gps_tx.tv_sec = (time_t)x4; /* get seconds from integer part */
-                    gps_tx.tv_nsec = (long)(x3 * 1E9); /* get nanoseconds from fractional part */
+                    x3 = modf((double) x2 / 1E3, &x4);
+                    gps_tx.tv_sec = (time_t) x4; /* get seconds from integer part */
+                    gps_tx.tv_nsec = (long) (x3 * 1E9); /* get nanoseconds from fractional part */
 
                     /* transform GPS time to timestamp */
                     i = lgw_gps2cnt(local_ref, gps_tx, &(txpkt.count_us));
@@ -2379,7 +2494,8 @@ void thread_down(void) {
                         json_value_free(root_val);
                         continue;
                     } else {
-                        MSG("INFO: [down] a packet will be sent on timestamp value %u (calculated from GPS time)\n", txpkt.count_us);
+                        MSG("INFO: [down] a packet will be sent on timestamp value %u (calculated from GPS time)\n",
+                            txpkt.count_us);
                     }
 
                     /* GPS timestamp is given, we consider it is a Class B downlink */
@@ -2388,33 +2504,33 @@ void thread_down(void) {
             }
 
             /* Parse "No CRC" flag (optional field) */
-            val = json_object_get_value(txpk_obj,"ncrc");
+            val = json_object_get_value(txpk_obj, "ncrc");
             if (val != NULL) {
-                txpkt.no_crc = (bool)json_value_get_boolean(val);
+                txpkt.no_crc = (bool) json_value_get_boolean(val);
             }
 
             /* parse target frequency (mandatory) */
-            val = json_object_get_value(txpk_obj,"freq");
+            val = json_object_get_value(txpk_obj, "freq");
             if (val == NULL) {
                 MSG("WARNING: [down] no mandatory \"txpk.freq\" object in JSON, TX aborted\n");
                 json_value_free(root_val);
                 continue;
             }
-            txpkt.freq_hz = (uint32_t)((double)(1.0e6) * json_value_get_number(val));
+            txpkt.freq_hz = (uint32_t) ((double) (1.0e6) * json_value_get_number(val));
 
             /* parse RF chain used for TX (mandatory) */
-            val = json_object_get_value(txpk_obj,"rfch");
+            val = json_object_get_value(txpk_obj, "rfch");
             if (val == NULL) {
                 MSG("WARNING: [down] no mandatory \"txpk.rfch\" object in JSON, TX aborted\n");
                 json_value_free(root_val);
                 continue;
             }
-            txpkt.rf_chain = (uint8_t)json_value_get_number(val);
+            txpkt.rf_chain = (uint8_t) json_value_get_number(val);
 
             /* parse TX power (optional field) */
-            val = json_object_get_value(txpk_obj,"powe");
+            val = json_object_get_value(txpk_obj, "powe");
             if (val != NULL) {
-                txpkt.rf_power = (int8_t)json_value_get_number(val) - antenna_gain;
+                txpkt.rf_power = (int8_t) json_value_get_number(val) - antenna_gain;
             }
 
             /* Parse modulation (mandatory) */
@@ -2442,21 +2558,39 @@ void thread_down(void) {
                     continue;
                 }
                 switch (x0) {
-                    case  7: txpkt.datarate = DR_LORA_SF7;  break;
-                    case  8: txpkt.datarate = DR_LORA_SF8;  break;
-                    case  9: txpkt.datarate = DR_LORA_SF9;  break;
-                    case 10: txpkt.datarate = DR_LORA_SF10; break;
-                    case 11: txpkt.datarate = DR_LORA_SF11; break;
-                    case 12: txpkt.datarate = DR_LORA_SF12; break;
+                    case 7:
+                        txpkt.datarate = DR_LORA_SF7;
+                        break;
+                    case 8:
+                        txpkt.datarate = DR_LORA_SF8;
+                        break;
+                    case 9:
+                        txpkt.datarate = DR_LORA_SF9;
+                        break;
+                    case 10:
+                        txpkt.datarate = DR_LORA_SF10;
+                        break;
+                    case 11:
+                        txpkt.datarate = DR_LORA_SF11;
+                        break;
+                    case 12:
+                        txpkt.datarate = DR_LORA_SF12;
+                        break;
                     default:
                         MSG("WARNING: [down] format error in \"txpk.datr\", invalid SF, TX aborted\n");
                         json_value_free(root_val);
                         continue;
                 }
                 switch (x1) {
-                    case 125: txpkt.bandwidth = BW_125KHZ; break;
-                    case 250: txpkt.bandwidth = BW_250KHZ; break;
-                    case 500: txpkt.bandwidth = BW_500KHZ; break;
+                    case 125:
+                        txpkt.bandwidth = BW_125KHZ;
+                        break;
+                    case 250:
+                        txpkt.bandwidth = BW_250KHZ;
+                        break;
+                    case 500:
+                        txpkt.bandwidth = BW_500KHZ;
+                        break;
                     default:
                         MSG("WARNING: [down] format error in \"txpk.datr\", invalid BW, TX aborted\n");
                         json_value_free(root_val);
@@ -2470,7 +2604,7 @@ void thread_down(void) {
                     json_value_free(root_val);
                     continue;
                 }
-                if      (strcmp(str, "4/5") == 0) txpkt.coderate = CR_LORA_4_5;
+                if (strcmp(str, "4/5") == 0) txpkt.coderate = CR_LORA_4_5;
                 else if (strcmp(str, "4/6") == 0) txpkt.coderate = CR_LORA_4_6;
                 else if (strcmp(str, "2/3") == 0) txpkt.coderate = CR_LORA_4_6;
                 else if (strcmp(str, "4/7") == 0) txpkt.coderate = CR_LORA_4_7;
@@ -2483,22 +2617,22 @@ void thread_down(void) {
                 }
 
                 /* Parse signal polarity switch (optional field) */
-                val = json_object_get_value(txpk_obj,"ipol");
+                val = json_object_get_value(txpk_obj, "ipol");
                 if (val != NULL) {
-                    txpkt.invert_pol = (bool)json_value_get_boolean(val);
+                    txpkt.invert_pol = (bool) json_value_get_boolean(val);
                 }
 
                 /* parse Lora preamble length (optional field, optimum min value enforced) */
-                val = json_object_get_value(txpk_obj,"prea");
+                val = json_object_get_value(txpk_obj, "prea");
                 if (val != NULL) {
-                    i = (int)json_value_get_number(val);
+                    i = (int) json_value_get_number(val);
                     if (i >= MIN_LORA_PREAMB) {
-                        txpkt.preamble = (uint16_t)i;
+                        txpkt.preamble = (uint16_t) i;
                     } else {
-                        txpkt.preamble = (uint16_t)MIN_LORA_PREAMB;
+                        txpkt.preamble = (uint16_t) MIN_LORA_PREAMB;
                     }
                 } else {
-                    txpkt.preamble = (uint16_t)STD_LORA_PREAMB;
+                    txpkt.preamble = (uint16_t) STD_LORA_PREAMB;
                 }
 
             } else if (strcmp(str, "FSK") == 0) {
@@ -2506,34 +2640,35 @@ void thread_down(void) {
                 txpkt.modulation = MOD_FSK;
 
                 /* parse FSK bitrate (mandatory) */
-                val = json_object_get_value(txpk_obj,"datr");
+                val = json_object_get_value(txpk_obj, "datr");
                 if (val == NULL) {
                     MSG("WARNING: [down] no mandatory \"txpk.datr\" object in JSON, TX aborted\n");
                     json_value_free(root_val);
                     continue;
                 }
-                txpkt.datarate = (uint32_t)(json_value_get_number(val));
+                txpkt.datarate = (uint32_t) (json_value_get_number(val));
 
                 /* parse frequency deviation (mandatory) */
-                val = json_object_get_value(txpk_obj,"fdev");
+                val = json_object_get_value(txpk_obj, "fdev");
                 if (val == NULL) {
                     MSG("WARNING: [down] no mandatory \"txpk.fdev\" object in JSON, TX aborted\n");
                     json_value_free(root_val);
                     continue;
                 }
-                txpkt.f_dev = (uint8_t)(json_value_get_number(val) / 1000.0); /* JSON value in Hz, txpkt.f_dev in kHz */
+                txpkt.f_dev = (uint8_t) (json_value_get_number(val) /
+                                         1000.0); /* JSON value in Hz, txpkt.f_dev in kHz */
 
                 /* parse FSK preamble length (optional field, optimum min value enforced) */
-                val = json_object_get_value(txpk_obj,"prea");
+                val = json_object_get_value(txpk_obj, "prea");
                 if (val != NULL) {
-                    i = (int)json_value_get_number(val);
+                    i = (int) json_value_get_number(val);
                     if (i >= MIN_FSK_PREAMB) {
-                        txpkt.preamble = (uint16_t)i;
+                        txpkt.preamble = (uint16_t) i;
                     } else {
-                        txpkt.preamble = (uint16_t)MIN_FSK_PREAMB;
+                        txpkt.preamble = (uint16_t) MIN_FSK_PREAMB;
                     }
                 } else {
-                    txpkt.preamble = (uint16_t)STD_FSK_PREAMB;
+                    txpkt.preamble = (uint16_t) STD_FSK_PREAMB;
                 }
 
             } else {
@@ -2543,13 +2678,13 @@ void thread_down(void) {
             }
 
             /* Parse payload length (mandatory) */
-            val = json_object_get_value(txpk_obj,"size");
+            val = json_object_get_value(txpk_obj, "size");
             if (val == NULL) {
                 MSG("WARNING: [down] no mandatory \"txpk.size\" object in JSON, TX aborted\n");
                 json_value_free(root_val);
                 continue;
             }
-            txpkt.size = (uint16_t)json_value_get_number(val);
+            txpkt.size = (uint16_t) json_value_get_number(val);
 
             /* Parse payload data (mandatory) */
             str = json_object_get_string(txpk_obj, "data");
@@ -2586,7 +2721,8 @@ void thread_down(void) {
             /* check TX parameter before trying to queue packet */
             if ((txpkt.freq_hz < tx_freq_min[txpkt.rf_chain]) || (txpkt.freq_hz > tx_freq_max[txpkt.rf_chain])) {
                 jit_result = JIT_ERROR_TX_FREQ;
-                MSG("ERROR: Packet REJECTED, unsupported frequency - %u (min:%u,max:%u)\n", txpkt.freq_hz, tx_freq_min[txpkt.rf_chain], tx_freq_max[txpkt.rf_chain]);
+                MSG("ERROR: Packet REJECTED, unsupported frequency - %u (min:%u,max:%u)\n", txpkt.freq_hz,
+                    tx_freq_min[txpkt.rf_chain], tx_freq_max[txpkt.rf_chain]);
             }
 
             if (jit_result == JIT_ERROR_OK) {
@@ -2596,7 +2732,8 @@ void thread_down(void) {
                     /* this RF power is not supported, throw a warning, and use the closest lower power supported */
                     warning_result = JIT_ERROR_TX_POWER;
                     warning_value = txlut.lut[tx_lut_idx].rf_power;
-                    MSG("WARNING: Requested TX power is not supported (%ddBm), actual power used: %ddBm\n", txpkt.rf_power, warning_value);
+                    MSG("WARNING: Requested TX power is not supported (%ddBm), actual power used: %ddBm\n",
+                        txpkt.rf_power, warning_value);
                     txpkt.rf_power = txlut.lut[tx_lut_idx].rf_power;
                 }
             }
@@ -2672,8 +2809,9 @@ void thread_jit(void) {
                     if (pkt_type == JIT_PKT_TYPE_BEACON) {
                         /* Compensate breacon frequency with xtal error */
                         pthread_mutex_lock(&mx_xcorr);
-                        pkt.freq_hz = (uint32_t)(xtal_correct * (double)pkt.freq_hz);
-                        MSG_DEBUG(DEBUG_BEACON, "beacon_pkt.freq_hz=%u (xtal_correct=%.15lf)\n", pkt.freq_hz, xtal_correct);
+                        pkt.freq_hz = (uint32_t) (xtal_correct * (double) pkt.freq_hz);
+                        MSG_DEBUG(DEBUG_BEACON, "beacon_pkt.freq_hz=%u (xtal_correct=%.15lf)\n", pkt.freq_hz,
+                                  xtal_correct);
                         pthread_mutex_unlock(&mx_xcorr);
 
                         /* Update statistics */
@@ -2767,7 +2905,7 @@ static void gps_process_sync(void) {
 static void gps_process_coords(void) {
     /* position variable */
     struct coord_s coord;
-    int    i = lgw_gps_get(NULL, NULL, NULL, &coord);
+    int i = lgw_gps_get(NULL, NULL, NULL, &coord);
 
     /* update gateway coordinates */
     pthread_mutex_lock(&mx_meas_gps);
@@ -2803,17 +2941,17 @@ void thread_gps(void) {
             wait_ms(1000);
             continue;
         }
-        wr_idx += (size_t)nb_char;
+        wr_idx += (size_t) nb_char;
 
         /*******************************************
          * Scan buffer for UBX/NMEA sync chars and *
          * attempt to decode frame if one is found *
          *******************************************/
-        while(rd_idx < wr_idx) {
+        while (rd_idx < wr_idx) {
             size_t frame_size = 0;
 
             /* Scan buffer for UBX sync char */
-            if(serial_buff[rd_idx] == (char)LGW_GPS_UBX_SYNC_CHAR) {
+            if (serial_buff[rd_idx] == (char) LGW_GPS_UBX_SYNC_CHAR) {
 
                 /***********************
                  * Found UBX sync char *
@@ -2834,19 +2972,19 @@ void thread_gps(void) {
                         gps_process_coords();
                     }
                 }
-            } else if(serial_buff[rd_idx] == LGW_GPS_NMEA_SYNC_CHAR) {
+            } else if (serial_buff[rd_idx] == LGW_GPS_NMEA_SYNC_CHAR) {
                 /************************
                  * Found NMEA sync char *
                  ************************/
                 /* scan for NMEA end marker (LF = 0x0a) */
-                char* nmea_end_ptr = memchr(&serial_buff[rd_idx],(int)0x0a, (wr_idx - rd_idx));
+                char *nmea_end_ptr = memchr(&serial_buff[rd_idx], (int) 0x0a, (wr_idx - rd_idx));
 
-                if(nmea_end_ptr) {
+                if (nmea_end_ptr) {
                     /* found end marker */
                     frame_size = nmea_end_ptr - &serial_buff[rd_idx] + 1;
                     latest_msg = lgw_parse_nmea(&serial_buff[rd_idx], frame_size);
 
-                    if(latest_msg == INVALID || latest_msg == UNKNOWN) {
+                    if (latest_msg == INVALID || latest_msg == UNKNOWN) {
                         /* checksum failed */
                         frame_size = 0;
                     } else if (latest_msg == NMEA_RMC) { /* Get location from RMC frames */
@@ -2855,7 +2993,7 @@ void thread_gps(void) {
                 }
             }
 
-            if(frame_size > 0) {
+            if (frame_size > 0) {
                 /* At this point message is a checksum verified frame
                    we're processed or ignored. Remove frame from buffer */
                 rd_idx += frame_size;
@@ -2865,14 +3003,14 @@ void thread_gps(void) {
             }
         } /* ...for(rd_idx = 0... */
 
-        if(frame_end_idx) {
-          /* Frames have been processed. Remove bytes to end of last processed frame */
-          memcpy(serial_buff, &serial_buff[frame_end_idx], wr_idx - frame_end_idx);
-          wr_idx -= frame_end_idx;
+        if (frame_end_idx) {
+            /* Frames have been processed. Remove bytes to end of last processed frame */
+            memcpy(serial_buff, &serial_buff[frame_end_idx], wr_idx - frame_end_idx);
+            wr_idx -= frame_end_idx;
         } /* ...for(rd_idx = 0... */
 
         /* Prevent buffer overflow */
-        if((sizeof(serial_buff) - wr_idx) < LGW_GPS_MIN_MSG_SIZE) {
+        if ((sizeof(serial_buff) - wr_idx) < LGW_GPS_MIN_MSG_SIZE) {
             memcpy(serial_buff, &serial_buff[LGW_GPS_MIN_MSG_SIZE], wr_idx - LGW_GPS_MIN_MSG_SIZE);
             wr_idx -= LGW_GPS_MIN_MSG_SIZE;
         }
@@ -2913,7 +3051,7 @@ void thread_valid(void) {
 
         /* calculate when the time reference was last updated */
         pthread_mutex_lock(&mx_timeref);
-        gps_ref_age = (long)difftime(time(NULL), time_reference_gps.systime);
+        gps_ref_age = (long) difftime(time(NULL), time_reference_gps.systime);
         if ((gps_ref_age >= 0) && (gps_ref_age <= GPS_REF_MAX_AGE)) {
             /* time ref is ok, validate and  */
             gps_ref_valid = true;
@@ -2944,7 +3082,7 @@ void thread_valid(void) {
             } else if (init_cpt == XERR_INIT_AVG) {
                 /* initial average calculation */
                 pthread_mutex_lock(&mx_xcorr);
-                xtal_correct = (double)(XERR_INIT_AVG) / init_acc;
+                xtal_correct = (double) (XERR_INIT_AVG) / init_acc;
                 //printf("XERR_INIT_AVG=%d, init_acc=%.15lf\n", XERR_INIT_AVG, init_acc);
                 xtal_correct_ok = true;
                 pthread_mutex_unlock(&mx_xcorr);
@@ -2954,7 +3092,7 @@ void thread_valid(void) {
                 /* tracking with low-pass filter */
                 x = 1 / xtal_err_cpy;
                 pthread_mutex_lock(&mx_xcorr);
-                xtal_correct = xtal_correct - xtal_correct/XERR_FILT_COEF + x/XERR_FILT_COEF;
+                xtal_correct = xtal_correct - xtal_correct / XERR_FILT_COEF + x / XERR_FILT_COEF;
                 pthread_mutex_unlock(&mx_xcorr);
                 // fprintf(log_file,"%.18lf,\"track\"\n", xtal_correct); // DEBUG
             }
