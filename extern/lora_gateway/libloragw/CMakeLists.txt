@@ -29,12 +29,12 @@ add_library(LoraGW::loragw ALIAS loragw)
 ##########################################################################
 # Logging Options                                                        #
 ##########################################################################
-option(DEBUG_AUX "Enable AUX logging")
-option(DEBUG_SPI "Enable SPI logging")
-option(DEBUG_REG "Enable REG logging")
-option(DEBUG_HAL "Enable HAL logging")
-option(DEBUG_LBT "Enable LBT logging")
-option(DEBUG_GPS "Enable GPS logging")
+option(DEBUG_AUX "Enable AUX logging" ON)
+option(DEBUG_SPI "Enable SPI logging" ON)
+option(DEBUG_REG "Enable REG logging" ON)
+option(DEBUG_HAL "Enable HAL logging" ON)
+option(DEBUG_LBT "Enable LBT logging" ON)
+option(DEBUG_GPS "Enable GPS logging" ON)
 
 ##########################################################################
 # Tests                                                                  #
