@@ -556,6 +556,8 @@ int lgw_connect(bool spi_only, uint32_t tx_notch_freq) {
             return LGW_REG_ERROR;
         }
 
+        DEBUG_PRINTF("ERROR: CHIP VERSION (v%u)\n", u);
+
         /* write 0 to the page/reset register */
         spi_stat = lgw_spi_w(lgw_spi_target, lgw_spi_mux_mode, LGW_SPI_MUX_TARGET_SX1301, loregs[LGW_PAGE_REG].addr, 0);
         if (spi_stat != LGW_SPI_SUCCESS) {
