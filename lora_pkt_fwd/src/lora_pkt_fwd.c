@@ -2006,10 +2006,10 @@ void thread_up(void) {
                     break;
                 }
             } else if ((j < 4) || (buff_ack[0] != PROTOCOL_VERSION) || (buff_ack[3] != PKT_PUSH_ACK)) {
-                //MSG("WARNING: [up] ignored invalid non-ACL packet\n");
+                MSG("WARNING: [up] ignored invalid non-ACL packet\n");
                 continue;
             } else if ((buff_ack[1] != token_h) || (buff_ack[2] != token_l)) {
-                //MSG("WARNING: [up] ignored out-of sync ACK packet\n");
+                MSG("WARNING: [up] ignored out-of sync ACK packet\n");
                 continue;
             } else {
                 MSG("INFO: [up] PUSH_ACK received in %i ms\n", (int) (1000 * difftimespec(recv_time, send_time)));
