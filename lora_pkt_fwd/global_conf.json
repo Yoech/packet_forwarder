@@ -55,20 +55,37 @@
     "gateway_conf": {
         "gateway_ID": "AA555A0000000000",
         /* change with default server address/ports, or overwrite in local_conf.json */
-        "server_address": "192.168.2.167",
+        "server_address": "localhost",
         "serv_port_up": 1680,
         "serv_port_down": 1780,
 
         /* adjust the following parameters for your network */
         "keepalive_interval": 10,
-        "stat_interval": 3600,
-        "push_timeout_ms": 1000,
+        "stat_interval": 60,
+        "push_timeout_ms": 100,
         "autoquit_threshold": 5,
 
         /* forward only valid packets */
         "forward_crc_valid": true,
         "forward_crc_error": false,
-        "forward_crc_disabled": false
+        "forward_crc_disabled": false,
+
+        "ref_latitude": 0.0,
+        "ref_longitude": 0.0,
+        "ref_altitude": 0,
+
+        "gps_tty_path": "/dev/serial1",
+
+        "fake_gps": true,
+
+        "beacon_period": 128,
+        "beacon_freq_hz": 508300000,
+        "beacon_freq_nb": 8,
+        "beacon_freq_step": 200000,
+        "beacon_datarate": 10,
+        "beacon_bw_hz": 125000,
+        "beacon_power": 20,
+        "beacon_infodesc": 0
     }
 }
 

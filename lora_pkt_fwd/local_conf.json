@@ -1,8 +1,11 @@
 {
     "gateway_conf": {
         /* adjust the following parameters for your network */
+        "server_address": "127.0.0.1",
+
+        /* adjust the following parameters for your network */
         "keepalive_interval": 10,
-        "stat_interval": 30,
+        "stat_interval": 60,
         "push_timeout_ms": 1000,
         "autoquit_threshold": 1000
     }
