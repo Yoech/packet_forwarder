@@ -948,8 +948,8 @@ static int send_tx_ack(uint8_t token_h, uint8_t token_l, enum jit_error_e error,
     buff_ack[1] = token_h;
     buff_ack[2] = token_l;
     buff_ack[3] = PKT_TX_ACK;
-    *(uint32_t *) (buff_ack + 4) = net_mac_h;
-    *(uint32_t *) (buff_ack + 8) = net_mac_l;
+    *(uint32_t * )(buff_ack + 4) = net_mac_h;
+    *(uint32_t * )(buff_ack + 8) = net_mac_l;
     buff_index = 12; /* 12-byte header */
 
     /* Put no JSON string if there is nothing to report */
@@ -1225,8 +1225,8 @@ int main(void) {
     // TODO
 
     /* process some of the configuration variables */
-    net_mac_h = htonl((uint32_t) (0xFFFFFFFF & (lgwm >> 32)));
-    net_mac_l = htonl((uint32_t) (0xFFFFFFFF & lgwm));
+    net_mac_h = htonl((uint32_t)(0xFFFFFFFF & (lgwm >> 32)));
+    net_mac_l = htonl((uint32_t)(0xFFFFFFFF & lgwm));
 
     /* prepare hints to open network sockets */
     memset(&hints, 0, sizeof hints);
@@ -1625,8 +1625,8 @@ void thread_up(void) {
     /* pre-fill the data buffer with fixed fields */
     buff_up[0] = PROTOCOL_VERSION;
     buff_up[3] = PKT_PUSH_DATA;
-    *(uint32_t *) (buff_up + 4) = net_mac_h;
-    *(uint32_t *) (buff_up + 8) = net_mac_l;
+    *(uint32_t * )(buff_up + 4) = net_mac_h;
+    *(uint32_t * )(buff_up + 8) = net_mac_l;
 
     while (!exit_sig && !quit_sig) {
 
@@ -2136,8 +2136,8 @@ void thread_down(void) {
     /* pre-fill the pull request buffer with fixed fields */
     buff_req[0] = PROTOCOL_VERSION;
     buff_req[3] = PKT_PULL_DATA;
-    *(uint32_t *) (buff_req + 4) = net_mac_h;
-    *(uint32_t *) (buff_req + 8) = net_mac_l;
+    *(uint32_t * )(buff_req + 4) = net_mac_h;
+    *(uint32_t * )(buff_req + 8) = net_mac_l;
 
     /* beacon variables initialization */
     last_beacon_gps_time.tv_sec = 0;
@@ -2203,13 +2203,13 @@ void thread_down(void) {
     beacon_pyld_idx += 2; /* crc1 (variable), filled later */
 
     /* calculate the latitude and longitude that must be publicly reported */
-    field_latitude = (int32_t) ((reference_coord.lat / 90.0) * (double) (1 << 23));
+    field_latitude = (int32_t)((reference_coord.lat / 90.0) * (double) (1 << 23));
     if (field_latitude > (int32_t) 0x007FFFFF) {
         field_latitude = (int32_t) 0x007FFFFF; /* +90 N is represented as 89.99999 N */
     } else if (field_latitude < (int32_t) 0xFF800000) {
         field_latitude = (int32_t) 0xFF800000;
     }
-    field_longitude = (int32_t) ((reference_coord.lon / 180.0) * (double) (1 << 23));
+    field_longitude = (int32_t)((reference_coord.lon / 180.0) * (double) (1 << 23));
     if (field_longitude > (int32_t) 0x007FFFFF) {
         field_longitude = (int32_t) 0x007FFFFF; /* +180 E is represented as 179.99999 E */
     } else if (field_longitude < (int32_t) 0xFF800000) {
@@ -2393,17 +2393,19 @@ void thread_down(void) {
             /* if the datagram is an ACK, check token */
             if (buff_down[3] == PKT_PULL_ACK) {
                 if ((buff_down[1] == token_h) && (buff_down[2] == token_l)) {
-                    if (req_ack) {
-                        MSG("INFO: [down] duplicate ACK received :)\n");
-                    } else { /* if that packet was not already acknowledged */
-                        req_ack = true;
-                        autoquit_cnt = 0;
-                        pthread_mutex_lock(&mx_meas_dw);
-                        meas_dw_ack_rcv += 1;
-                        pthread_mutex_unlock(&mx_meas_dw);
-                        MSG("INFO: [down] PULL_ACK received in %i ms\n",
-                            (int) (1000 * difftimespec(recv_time, send_time)));
-                    }
+                    // remove duplicate ACK check
+                    // Cool.Cat
+//                    if (req_ack) {
+//                        MSG("INFO: [down] duplicate ACK received :)\n");
+//                    } else { /* if that packet was not already acknowledged */
+                    req_ack = true;
+                    autoquit_cnt = 0;
+                    pthread_mutex_lock(&mx_meas_dw);
+                    meas_dw_ack_rcv += 1;
+                    pthread_mutex_unlock(&mx_meas_dw);
+                    MSG("INFO: [down] PULL_ACK received in %i ms\n",
+                        (int) (1000 * difftimespec(recv_time, send_time)));
+//                    }
                 } else { /* out-of-sync token */
                     MSG("INFO: [down] received out-of-sync ACK\n");
                 }
@@ -2516,7 +2518,7 @@ void thread_down(void) {
                 json_value_free(root_val);
                 continue;
             }
-            txpkt.freq_hz = (uint32_t) ((double) (1.0e6) * json_value_get_number(val));
+            txpkt.freq_hz = (uint32_t)((double) (1.0e6) * json_value_get_number(val));
 
             /* parse RF chain used for TX (mandatory) */
             val = json_object_get_value(txpk_obj, "rfch");
@@ -2646,7 +2648,7 @@ void thread_down(void) {
                     json_value_free(root_val);
                     continue;
                 }
-                txpkt.datarate = (uint32_t) (json_value_get_number(val));
+                txpkt.datarate = (uint32_t)(json_value_get_number(val));
 
                 /* parse frequency deviation (mandatory) */
                 val = json_object_get_value(txpk_obj, "fdev");
@@ -2655,8 +2657,8 @@ void thread_down(void) {
                     json_value_free(root_val);
                     continue;
                 }
-                txpkt.f_dev = (uint8_t) (json_value_get_number(val) /
-                                         1000.0); /* JSON value in Hz, txpkt.f_dev in kHz */
+                txpkt.f_dev = (uint8_t)(json_value_get_number(val) /
+                                        1000.0); /* JSON value in Hz, txpkt.f_dev in kHz */
 
                 /* parse FSK preamble length (optional field, optimum min value enforced) */
                 val = json_object_get_value(txpk_obj, "prea");
@@ -2809,7 +2811,7 @@ void thread_jit(void) {
                     if (pkt_type == JIT_PKT_TYPE_BEACON) {
                         /* Compensate breacon frequency with xtal error */
                         pthread_mutex_lock(&mx_xcorr);
-                        pkt.freq_hz = (uint32_t) (xtal_correct * (double) pkt.freq_hz);
+                        pkt.freq_hz = (uint32_t)(xtal_correct * (double) pkt.freq_hz);
                         MSG_DEBUG(DEBUG_BEACON, "beacon_pkt.freq_hz=%u (xtal_correct=%.15lf)\n", pkt.freq_hz,
                                   xtal_correct);
                         pthread_mutex_unlock(&mx_xcorr);
